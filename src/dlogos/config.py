@@ -76,6 +76,9 @@ class Settings(BaseSettings):
         default="https://query.wikidata.org/sparql", alias="WIKIDATA_ENDPOINT"
     )
 
+    # --- ASR: HuggingFace token for the gated pyannote diarization pipeline ---
+    hf_token: str = Field(default="", alias="HF_TOKEN")
+
 
 # Module-level singleton — import this, don't construct Settings ad hoc.
 settings = Settings()

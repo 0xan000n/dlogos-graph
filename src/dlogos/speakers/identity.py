@@ -72,6 +72,61 @@ class HostSeed:
     sample_refs: tuple[str, ...] = ()
 
 
+@runtime_checkable
+class ManifestRowLike(Protocol):
+    """The slice of a corpus-manifest row this module's adapter consumes.
+
+    Declared structurally (duck-typed) so the speakers package keeps **no**
+    import dependency on the separately-owned ingestion manifest module — any
+    object exposing these three attributes (the real
+    :class:`dlogos.ingestion.manifest.ManifestRow` does) can be adapted.
+    """
+
+    show_id: str
+    known_hosts: list[str]
+    reference_audio: dict[str, str]
+
+
+def host_speaker_id(name: str) -> str:
+    """Derive a stable canonical-host id from a host display name.
+
+    Deterministic and collision-resistant enough for the gallery: the same
+    host name always yields the same ``host-<slug>`` id, so a host recurring
+    across shows merges into one gallery entry (see
+    :meth:`HostGallery.add_host`).
+    """
+
+    slug = "-".join(name.lower().split())
+    return f"host-{slug}" if slug else "host-unknown"
+
+
+def seeds_from_manifest_rows(rows: list[ManifestRowLike]) -> list[HostSeed]:
+    """Adapt corpus-manifest rows into :class:`HostSeed`\\s.
+
+    Each named host in a row's ``known_hosts`` becomes one seed; the seed's
+    ``sample_refs`` are populated from the row's per-host ``reference_audio``
+    (empty when the host has no reference, which is allowed — the host still
+    defines a canonical speaker but cannot be voiceprint-matched). A host that
+    appears across multiple shows produces multiple seeds with the same
+    ``speaker_id``; :meth:`HostGallery.add_host` merges them.
+    """
+
+    seeds: list[HostSeed] = []
+    for row in rows:
+        reference_audio = getattr(row, "reference_audio", {}) or {}
+        for name in row.known_hosts:
+            ref = reference_audio.get(name)
+            seeds.append(
+                HostSeed(
+                    speaker_id=host_speaker_id(name),
+                    name=name,
+                    show_id=row.show_id,
+                    sample_refs=(ref,) if ref else (),
+                )
+            )
+    return seeds
+
+
 @dataclass(frozen=True)
 class CanonicalSpeaker:
     """A resolved, cross-episode speaker (host or recurring guest)."""
@@ -170,6 +225,30 @@ class HostGallery:
         for host in hosts:
             gallery.add_host(host)
         return gallery
+
+    @classmethod
+    def from_manifest_rows(
+        cls,
+        rows: list[ManifestRowLike],
+        embedder: VoiceEmbedder,
+        *,
+        threshold: float = 0.75,
+        margin: float = 0.05,
+    ) -> "HostGallery":
+        """Seed a gallery directly from corpus-manifest rows.
+
+        Adapts ``rows`` into :class:`HostSeed`\\s (via
+        :func:`seeds_from_manifest_rows`, which pulls each host's
+        ``sample_refs`` from the row's ``reference_audio``) and builds the
+        gallery — the manifest→gallery bridge.
+        """
+
+        return cls.from_hosts(
+            seeds_from_manifest_rows(rows),
+            embedder,
+            threshold=threshold,
+            margin=margin,
+        )
 
     def add_host(self, host: HostSeed) -> None:
         """Add (or merge into) a host's gallery entry.

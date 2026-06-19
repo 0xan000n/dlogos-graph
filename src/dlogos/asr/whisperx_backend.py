@@ -88,20 +88,24 @@ class WhisperXBackend:
         return "float16" if device == "cuda" else "int8"
 
     def _resolve_hf_token(self) -> str | None:
+        """Resolve the HuggingFace token for gated pyannote diarization.
+
+        Precedence: an explicit ``hf_token`` passed to the constructor wins;
+        otherwise read ``HF_TOKEN`` from configuration. A blank/unset config
+        value resolves to ``None`` so pyannote can fall back to its own
+        environment (``HUGGINGFACE_TOKEN``) if present.
+        """
+
         if self.hf_token is not None:
             return self.hf_token
         # Lazy config read so importing this module needs no settings either.
         try:
             from dlogos.config import settings
 
-            # Reuse the extraction key slot is wrong; pyannote needs a HF token.
-            # We deliberately do not invent a config field here — callers pass
-            # hf_token explicitly when diarizing. Returning None lets pyannote
-            # fall back to its own env (HUGGINGFACE_TOKEN) if present.
-            _ = settings  # touch to show intent; no dedicated field today
+            token = (settings.hf_token or "").strip()
+            return token or None
         except Exception:  # pragma: no cover - config import is cheap & safe
-            pass
-        return None
+            return None
 
     # ------------------------------------------------------------------ #
     # Main entry point

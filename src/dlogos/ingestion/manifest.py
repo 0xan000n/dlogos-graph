@@ -1,8 +1,9 @@
 """The corpus manifest (spec §4): the reviewed input artifact for backfill.
 
 One row per show — ``feed_url``, canonical ``show_id``, ``domains`` tag(s),
-``known_hosts`` (for voiceprint-gallery seeding), and a ``deep_backfill`` flag
-marking the ~15–25 high-velocity subset that carries the temporal-shift demos.
+``known_hosts`` (for voiceprint-gallery seeding) with optional per-host
+``reference_audio`` refs, and a ``deep_backfill`` flag marking the ~15–25
+high-velocity subset that carries the temporal-shift demos.
 
 The manifest is a versioned JSON config. ``load_manifest`` / ``save_manifest``
 round-trip it losslessly through Pydantic v2 so it can be hand-reviewed,
@@ -14,7 +15,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 # Manifest schema version — bump when the row shape changes incompatibly.
 MANIFEST_VERSION = 1
@@ -35,6 +36,15 @@ class ManifestRow(BaseModel):
         default_factory=list,
         description="Host names; seeds the host-anchored voiceprint gallery (§7.3).",
     )
+    reference_audio: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Optional per-host reference-audio ref, keyed by host name "
+            "(must be one of ``known_hosts``). Seeds the voiceprint gallery's "
+            "sample refs (§7.3); hosts without a ref still define a canonical "
+            "speaker but cannot be voiceprint-matched."
+        ),
+    )
     deep_backfill: bool = Field(
         default=False,
         description="True for the ~15–25 high-velocity deep-tier subset (§4b).",
@@ -46,6 +56,16 @@ class ManifestRow(BaseModel):
         if not v or not v.strip():
             raise ValueError("show_id and feed_url must be non-empty")
         return v
+
+    @model_validator(mode="after")
+    def _reference_audio_keys_are_known_hosts(self) -> "ManifestRow":
+        unknown = set(self.reference_audio) - set(self.known_hosts)
+        if unknown:
+            raise ValueError(
+                "reference_audio keys must be listed in known_hosts; "
+                f"unknown host(s): {sorted(unknown)!r}"
+            )
+        return self
 
 
 class CorpusManifest(BaseModel):
