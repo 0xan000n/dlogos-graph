@@ -2,30 +2,38 @@
 
 Composes the per-stage modules into one offline-runnable flow:
 
-    ingest -> ASR -> diarize/prune -> cross-episode speaker identity ->
+    ingest (manifest -> podcast index -> queue -> fetch) ->
+    ASR -> diarize/prune -> cross-episode speaker identity ->
     chunk -> extract -> resolve (subject-entity clustering) -> bulk-load (graph)
 
-Every collaborator is **injected** through :class:`PipelineDeps`, so the whole
-pipeline runs offline on the core dependency group: a
+Every collaborator is **injected** through :class:`PipelineDeps` (the back half)
+and :class:`IngestionDeps` (the front half), so the whole pipeline runs offline
+on the core dependency group: a fake Podcast Index client, an
+:class:`~dlogos.ingestion.queue.InMemoryJobQueue`, an
+:class:`~dlogos.ingestion.fetch.AudioFetcher` over a mock HTTP transport, a
 :class:`~dlogos.asr.mock_backend.MockASRBackend`, an in-memory
 :class:`~dlogos.graph.fake_store.FakeGraphStore`, the conftest ``FakeEmbedder``,
 a fake async extraction client, and (optionally) a host gallery + guest
 resolver. No stage imports a heavy/optional dependency at module top level.
 
 The orchestrator is deliberately a *composition* of the module interfaces — it
-adds no new domain logic, only the wiring and the small "stamp the resolved
-speaker id onto each extracted claim" join that sits between the speaker-identity
-stage and subject resolution. The output (:class:`PipelineResult`) carries the
-resolved claims, the per-episode event-time map, and the loaded graph store, so a
-caller can immediately build a retrieval surface over it (see
-:meth:`PipelineResult.build_retrieval_surface`).
+adds no new domain logic, only the wiring: the front-half ingestion drive
+(manifest row -> Podcast Index recent episodes -> idempotent job queue -> audio
+fetch -> :class:`Episode`), the manifest-seeded cross-episode identity (a
+host-anchored :class:`~dlogos.speakers.identity.HostGallery` plus a recurring
+:class:`~dlogos.speakers.guests.GuestResolver` run *across* episodes), and the
+small "stamp the resolved speaker id onto each extracted claim" join that sits
+between the speaker-identity stage and subject resolution. The output
+(:class:`PipelineResult`) carries the resolved claims, the per-episode
+event-time map, and the loaded graph store, so a caller can immediately build a
+retrieval surface over it (see :meth:`PipelineResult.build_retrieval_surface`).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Callable
+from typing import Any, Callable, Protocol, runtime_checkable
 
 from dlogos.asr.base import ASRBackend, drop_low_talk_time_speakers
 from dlogos.extraction.chunking import (
@@ -35,6 +43,9 @@ from dlogos.extraction.chunking import (
 )
 from dlogos.extraction.extractor import ClaimExtractor
 from dlogos.graph.loader import ClaimLoader
+from dlogos.ingestion.fetch import FetchResult
+from dlogos.ingestion.manifest import CorpusManifest, ManifestRow
+from dlogos.ingestion.queue import JobQueue
 from dlogos.resolution.subjects import (
     DEFAULT_SIMILARITY_THRESHOLD,
     Embedder,
@@ -47,7 +58,85 @@ from dlogos.speakers.identity import (
     CanonicalSpeaker,
     HostGallery,
     SpeakerResolution,
+    VoiceEmbedder,
 )
+
+
+# --------------------------------------------------------------------------- #
+# Ingestion front-end seams (the part that produces Episodes)
+# --------------------------------------------------------------------------- #
+@runtime_checkable
+class PodcastIndexLike(Protocol):
+    """The slice of :class:`~dlogos.ingestion.podcast_index.PodcastIndexClient`
+    the orchestrator drives.
+
+    Declared structurally so a unit test can inject a tiny fake returning
+    canned ``items`` (no network, no signed headers) — the real client (which
+    touches ``httpx`` only inside its methods) satisfies it unchanged.
+    """
+
+    def recent_episodes(
+        self,
+        *,
+        feed_id: int | None = None,
+        feed_url: str | None = None,
+        max_results: int | None = None,
+        since: int | None = None,
+    ) -> list[dict[str, Any]]:  # pragma: no cover - protocol
+        ...
+
+
+@runtime_checkable
+class AudioFetcherLike(Protocol):
+    """The slice of :class:`~dlogos.ingestion.fetch.AudioFetcher` we drive.
+
+    ``fetch`` is GUID-idempotent and content-hash-deduped; the orchestrator
+    only needs the resulting :class:`~dlogos.ingestion.fetch.FetchResult`'s
+    ``content_hash`` (stamped onto the Episode as ``audio_sha256``) and the
+    idempotency guarantee. Tests inject an ``AudioFetcher`` over a mock HTTP
+    transport.
+    """
+
+    def fetch(self, guid: str, audio_url: str) -> FetchResult:  # pragma: no cover
+        ...
+
+
+@dataclass
+class IngestionDeps:
+    """The injected front-half collaborators that turn a manifest into Episodes.
+
+    Mirrors the spec §7.1 path: resolve a feed's recent episodes via the
+    Podcast Index, model the work as a queue (idempotent on episode GUID so
+    re-polling never reprocesses), then fetch + content-hash the enclosure. All
+    three are injectable so the integration test drives them on fakes:
+    a fake :class:`PodcastIndexLike`, an
+    :class:`~dlogos.ingestion.queue.InMemoryJobQueue`, and an
+    :class:`~dlogos.ingestion.fetch.AudioFetcher` over a mock transport.
+
+    Parameters
+    ----------
+    podcast_index:
+        Resolves each manifest row's feed to recent episode items.
+    queue:
+        The job queue backfill fans out onto; GUID is the idempotency key, so a
+        re-ingested feed enqueues each episode exactly once.
+    fetcher:
+        Audio-enclosure fetcher (GUID-idempotent, content-hash dedupe). When
+        ``None`` the audio fetch is skipped (episodes still flow through, just
+        without an ``audio_sha256`` stamp) — handy for tests that don't model a
+        blob store.
+    max_episodes_per_feed:
+        Upper bound on episodes pulled per feed (the Podcast Index ``max``).
+    since:
+        Optional unix-timestamp lower bound forwarded to the incremental poller
+        so only newer items are pulled.
+    """
+
+    podcast_index: PodcastIndexLike
+    queue: JobQueue
+    fetcher: AudioFetcherLike | None = None
+    max_episodes_per_feed: int | None = None
+    since: int | None = None
 
 
 # --------------------------------------------------------------------------- #
@@ -90,6 +179,15 @@ class PipelineDeps:
         the same role the spike's ``IdentitySpeakerResolver`` plays. When
         ``None`` (the default), unresolved labels stay unresolved and their
         claims are dropped from the load (kept in the per-episode run for audit).
+    voice_sample_ref_for:
+        Optional ``(episode_id, label) -> sample_ref`` callable that supplies a
+        per-episode voiceprint sample key for the host gallery when an
+        :class:`EpisodeInput` does not carry explicit ``voice_sample_refs``. This
+        is the seam a real diarization stage fills (a key into the stored
+        diarization-segment audio); injecting it lets the manifest-driven path
+        resolve hosts by voiceprint without the caller hand-assembling per-label
+        refs. ``None`` (the default) means the gallery only runs against any
+        explicit ``EpisodeInput.voice_sample_refs``.
     """
 
     asr: ASRBackend
@@ -101,6 +199,7 @@ class PipelineDeps:
     fallback_speaker_id: (
         Callable[[str, str], tuple[str, str | None] | None] | None
     ) = None
+    voice_sample_ref_for: Callable[[str, str], str | None] | None = None
 
 
 # --------------------------------------------------------------------------- #
@@ -179,18 +278,22 @@ class PipelineResult:
 class Pipeline:
     """Composes the dLogos stages end to end (spec §5).
 
-    Construct with injected :class:`PipelineDeps`; call :meth:`run` with the
-    episodes to process. The orchestrator runs each episode through ASR ->
-    talk-time prune -> speaker identity -> chunk -> extract -> stamp resolved
-    speaker ids, accumulates all claims, then runs subject-entity resolution and
-    a single bulk graph load over the whole batch (so the load bypasses
-    Graphiti's per-add LLM dedup — spec §7.5/§7.6).
+    Construct with injected :class:`PipelineDeps`; optionally pass
+    :class:`IngestionDeps` to drive the front half from a
+    :class:`~dlogos.ingestion.manifest.CorpusManifest`. Call :meth:`run` with
+    episodes you already have, or :meth:`run_from_manifest` to ingest them from a
+    manifest first. The orchestrator runs each episode through ASR -> talk-time
+    prune -> cross-episode speaker identity (host gallery + recurring guests) ->
+    chunk -> extract -> stamp resolved speaker ids, accumulates all claims, then
+    runs subject-entity resolution and a single bulk graph load over the whole
+    batch (so the load bypasses Graphiti's per-add LLM dedup — spec §7.5/§7.6).
     """
 
     def __init__(
         self,
         deps: PipelineDeps,
         *,
+        ingestion: IngestionDeps | None = None,
         min_talk_time_fraction: float = 0.05,
         max_chunk_chars: int = DEFAULT_MAX_CHARS,
         overlap_segments: int = DEFAULT_OVERLAP_SEGMENTS,
@@ -199,6 +302,7 @@ class Pipeline:
         bypass_llm_dedup: bool = True,
     ) -> None:
         self._deps = deps
+        self._ingestion = ingestion
         self._min_talk_time_fraction = min_talk_time_fraction
         self._max_chunk_chars = max_chunk_chars
         self._overlap_segments = overlap_segments
@@ -298,6 +402,161 @@ class Pipeline:
         )
 
     # ------------------------------------------------------------------ #
+    # Front-half: ingestion entry path (manifest -> Episodes)
+    # ------------------------------------------------------------------ #
+    @classmethod
+    def from_manifest(
+        cls,
+        manifest: CorpusManifest,
+        deps: PipelineDeps,
+        ingestion: IngestionDeps,
+        voice_embedder: VoiceEmbedder,
+        **kwargs: Any,
+    ) -> "Pipeline":
+        """Build a pipeline whose host gallery is *seeded from the manifest*.
+
+        The corpus manifest is the spec's reviewed input artifact (§4): it names
+        each show's ``known_hosts`` (with optional reference audio). This seeds a
+        host-anchored :class:`~dlogos.speakers.identity.HostGallery` (§7.3) so
+        cross-episode host identity runs in the orchestrator rather than via the
+        per-episode fallback hook. The seeded gallery is injected into a *copy*
+        of ``deps`` (the caller's ``deps`` is left untouched) only when no
+        gallery was supplied — an explicitly injected one always wins.
+
+        ``voice_embedder`` is the (injected) :class:`VoiceEmbedder` the gallery
+        embeds reference audio with; tests pass a deterministic fake.
+        """
+
+        gallery = deps.host_gallery
+        if gallery is None:
+            gallery = HostGallery.from_manifest_rows(
+                list(manifest.rows), voice_embedder
+            )
+        seeded = PipelineDeps(
+            asr=deps.asr,
+            extractor=deps.extractor,
+            embedder=deps.embedder,
+            store=deps.store,
+            host_gallery=gallery,
+            guest_resolver=deps.guest_resolver,
+            fallback_speaker_id=deps.fallback_speaker_id,
+            voice_sample_ref_for=deps.voice_sample_ref_for,
+        )
+        return cls(seeded, ingestion=ingestion, **kwargs)
+
+    def ingest(self, manifest: CorpusManifest) -> list[EpisodeInput]:
+        """Drive the front half: a manifest -> queued, fetched :class:`Episode`\\s.
+
+        For every manifest row this resolves the feed's recent episodes via the
+        injected Podcast Index, enqueues each onto the job queue keyed by GUID
+        (so re-ingesting a feed never double-processes — spec §7.1), then leases
+        each job, fetches + content-hashes its enclosure (GUID-idempotent), and
+        builds an :class:`EpisodeInput`. The row's ``domains`` flow onto each
+        episode for guest-Wikidata disambiguation; the row's ``known_hosts`` are
+        attached as the host display name so the gallery + downstream attribution
+        agree on the show's host.
+
+        Returns the :class:`EpisodeInput` list in feed/queue order. Requires
+        :class:`IngestionDeps` to have been injected.
+        """
+
+        if self._ingestion is None:
+            raise ValueError(
+                "Pipeline.ingest requires IngestionDeps; construct the pipeline "
+                "with ingestion=IngestionDeps(...) (or use run_from_manifest)."
+            )
+        ing = self._ingestion
+
+        # Row lookup so a leased job can recover its show context (domains/hosts).
+        row_by_show: dict[str, ManifestRow] = {r.show_id: r for r in manifest.rows}
+
+        # 1) Resolve + enqueue every feed's recent episodes (idempotent on GUID).
+        for row in manifest.rows:
+            items = ing.podcast_index.recent_episodes(
+                feed_url=row.feed_url,
+                max_results=ing.max_episodes_per_feed,
+                since=ing.since,
+            )
+            for item in items:
+                guid = str(item.get("guid") or "").strip()
+                if not guid:
+                    # No GUID -> no idempotency key; skip rather than risk a
+                    # duplicate-work or a crash (spec §7.1 keys on GUID).
+                    continue
+                payload = {
+                    "guid": guid,
+                    "show_id": row.show_id,
+                    "audio_url": str(item.get("enclosureUrl") or ""),
+                    "title": str(item.get("title") or ""),
+                    "date_published": item.get("datePublished"),
+                }
+                ing.queue.enqueue(payload, idempotency_key=guid)
+
+        # 2) Lease each queued job, fetch the enclosure, build an EpisodeInput.
+        episodes: list[EpisodeInput] = []
+        while True:
+            job = ing.queue.lease()
+            if job is None:
+                break
+            try:
+                ep_input = self._episode_input_from_job(job.payload, row_by_show)
+            except Exception:
+                # A bad payload should not poison the whole backfill: mark this
+                # job failed and keep draining the queue.
+                ing.queue.nack(job.id, requeue=False)
+                continue
+            episodes.append(ep_input)
+            ing.queue.ack(job.id)
+        return episodes
+
+    def _episode_input_from_job(
+        self, payload: dict[str, Any], row_by_show: dict[str, ManifestRow]
+    ) -> EpisodeInput:
+        """Map one queued ingestion job into an :class:`EpisodeInput`.
+
+        Fetches the audio enclosure (GUID-idempotent) when a fetcher is
+        injected, stamping the content hash onto the Episode as ``audio_sha256``.
+        Attaches the show's domains for guest disambiguation.
+        """
+
+        guid = str(payload["guid"])
+        show_id = str(payload.get("show_id") or "")
+        audio_url = str(payload.get("audio_url") or "")
+        row = row_by_show.get(show_id)
+
+        audio_sha256: str | None = None
+        ingestion = self._ingestion
+        if ingestion is not None and ingestion.fetcher is not None and audio_url:
+            result = ingestion.fetcher.fetch(guid, audio_url)
+            audio_sha256 = result.content_hash
+
+        episode = Episode(
+            episode_id=guid,
+            show_id=show_id,
+            guid=guid,
+            title=str(payload.get("title") or guid),
+            published_at=_published_at(payload.get("date_published")),
+            audio_url=audio_url,
+            audio_sha256=audio_sha256,
+        )
+        return EpisodeInput(
+            episode=episode,
+            audio_path=audio_url,
+            domains=list(row.domains) if row is not None else [],
+        )
+
+    async def run_from_manifest(self, manifest: CorpusManifest) -> PipelineResult:
+        """Ingest a manifest's episodes and run them through the full pipeline.
+
+        The single front-to-back entry point: :meth:`ingest` drives the queue +
+        fetch front half, then :meth:`run` carries the resulting episodes through
+        ASR -> identity -> extract -> resolve -> load. Identity is orchestrated
+        (host gallery + guest resolver), not hand-fed.
+        """
+
+        return await self.run(self.ingest(manifest))
+
+    # ------------------------------------------------------------------ #
     # Stage helpers
     # ------------------------------------------------------------------ #
     def _resolve_guests(
@@ -321,11 +580,14 @@ class Pipeline:
                 transcript = transcript.model_copy(
                     update={"episode_id": ep_input.episode.episode_id}
                 )
+            guest_label = ep_input.guest_label or self._infer_guest_label(
+                transcript, ep_input
+            )
             resolver.add_episode(
                 transcript,
                 show_id=ep_input.episode.show_id,
                 metadata_names=ep_input.metadata_guest_names or None,
-                guest_label=ep_input.guest_label,
+                guest_label=guest_label,
                 context=ep_input.domains or None,
             )
 
@@ -336,6 +598,67 @@ class Pipeline:
             for episode_id in resolution.episode_ids:
                 by_episode[episode_id] = resolution
         return by_episode
+
+    def _infer_guest_label(
+        self, transcript: Transcript, ep_input: EpisodeInput
+    ) -> str | None:
+        """Best-effort guest diarization label when the caller didn't supply one.
+
+        A real feed's metadata names the guest but not *which* diarization label
+        is theirs. When a host gallery is injected we infer it: resolve each
+        label, then pick the most-talkative label the gallery did **not** match
+        to a host. That ties the resolved recurring-guest id to the right
+        per-episode turns without the caller hand-labelling them. Returns
+        ``None`` when there's no gallery or every label resolved to a host.
+        """
+
+        gallery = self._deps.host_gallery
+        labels = list(dict.fromkeys(seg.speaker for seg in transcript.segments))
+        voice_sample_refs = self._voice_sample_refs(ep_input, labels)
+        host_labels: set[str] = set()
+        if gallery is not None and voice_sample_refs:
+            for label, res in gallery.resolve_transcript(
+                transcript, voice_sample_refs
+            ).items():
+                resolved = res.resolved
+                if res.is_resolved and resolved is not None and resolved.is_host:
+                    host_labels.add(label)
+
+        talk_time: dict[str, float] = {}
+        for seg in transcript.segments:
+            if seg.speaker in host_labels:
+                continue
+            talk_time[seg.speaker] = talk_time.get(seg.speaker, 0.0) + max(
+                0.0, seg.t_end - seg.t_start
+            )
+        if not talk_time:
+            return None
+        # Deterministic: most talk time, ties broken by label order.
+        return max(sorted(talk_time), key=lambda lbl: talk_time[lbl])
+
+    def _voice_sample_refs(
+        self, ep_input: EpisodeInput, labels: list[str]
+    ) -> dict[str, str]:
+        """The per-label voiceprint sample refs for this episode.
+
+        Explicit ``EpisodeInput.voice_sample_refs`` win. Otherwise, when the
+        injected ``voice_sample_ref_for`` hook is present (the diarization seam),
+        derive a ref per diarization label so the manifest-driven path can
+        voiceprint-match hosts without the caller hand-assembling refs.
+        """
+
+        if ep_input.voice_sample_refs:
+            return ep_input.voice_sample_refs
+        hook = self._deps.voice_sample_ref_for
+        if hook is None:
+            return {}
+        episode_id = ep_input.episode.episode_id
+        refs: dict[str, str] = {}
+        for label in labels:
+            ref = hook(episode_id, label)
+            if ref:
+                refs[label] = ref
+        return refs
 
     def _resolve_speakers(
         self,
@@ -355,10 +678,9 @@ class Pipeline:
         resolution: dict[str, SpeakerResolution] = {}
 
         gallery = self._deps.host_gallery
-        if gallery is not None and ep_input.voice_sample_refs:
-            resolution = gallery.resolve_transcript(
-                transcript, ep_input.voice_sample_refs
-            )
+        voice_sample_refs = self._voice_sample_refs(ep_input, labels)
+        if gallery is not None and voice_sample_refs:
+            resolution = gallery.resolve_transcript(transcript, voice_sample_refs)
 
         guest = guest_resolutions.get(ep_input.episode.episode_id)
         guest_per_ep = (
@@ -474,6 +796,38 @@ async def run_pipeline(
         **pipeline_kwargs,  # type: ignore[arg-type]
     )
     return await pipeline.run(episodes)
+
+
+def _published_at(date_published: Any) -> datetime:
+    """Coerce a Podcast Index ``datePublished`` (unix seconds) to a UTC datetime.
+
+    The Podcast Index reports publish times as integer unix seconds. We parse
+    that into a timezone-aware UTC :class:`datetime` (the event-time anchor every
+    bitemporal edge joins against — spec §6). A missing/unparseable value falls
+    back to ingestion ``now`` so a malformed feed item never crashes the load,
+    only loses its precise event-time.
+    """
+
+    if isinstance(date_published, bool):  # guard: bool is an int subclass
+        return utc_now()
+    if isinstance(date_published, (int, float)):
+        try:
+            return datetime.fromtimestamp(float(date_published), tz=timezone.utc)
+        except (OverflowError, OSError, ValueError):  # pragma: no cover - defensive
+            return utc_now()
+    if isinstance(date_published, str) and date_published.strip():
+        try:
+            return datetime.fromtimestamp(
+                float(date_published.strip()), tz=timezone.utc
+            )
+        except ValueError:
+            pass
+        try:
+            parsed = datetime.fromisoformat(date_published.strip())
+        except ValueError:
+            return utc_now()
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    return utc_now()
 
 
 def utc_now() -> datetime:
