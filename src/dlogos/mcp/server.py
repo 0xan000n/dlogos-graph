@@ -32,13 +32,21 @@ on the concrete retriever, so they stay decoupled and deterministic.
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Protocol, runtime_checkable
+from datetime import datetime, timedelta
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from dlogos.retrieval.consensus import ConsensusTrend
-from dlogos.retrieval.hybrid import RetrievalResult
+from dlogos.retrieval.consensus import ConsensusTrend, consensus_over_time
+from dlogos.retrieval.hybrid import (
+    HybridRetriever,
+    RetrievalResult,
+    TemporalMode,
+)
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from dlogos.retrieval.hybrid import Embedder
+    from dlogos.schema import ExtractedClaim
 
 # --------------------------------------------------------------------------- #
 # The surface the handlers delegate to (injected; a fake satisfies it in tests)
@@ -413,6 +421,121 @@ def provenance_lookup_handler(
         t_end=span.t_end if span is not None else None,
         event_time=c.event_time,
     )
+
+
+# --------------------------------------------------------------------------- #
+# Concrete surface — wires the handlers to the REAL retrieval/consensus objects
+# --------------------------------------------------------------------------- #
+class GraphRetrievalSurface:
+    """A real :class:`RetrievalSurface` over the dLogos retrieval stack.
+
+    This is the adapter that makes the MCP tools delegate to the *real*
+    retrieval objects rather than a fake: ``search`` runs the
+    :class:`~dlogos.retrieval.hybrid.HybridRetriever` (semantic + BM25 + graph
+    traversal, RRF-fused) over claims materialized from the graph store, with
+    the event-time window applied; ``consensus`` runs the pure
+    :func:`~dlogos.retrieval.consensus.consensus_over_time` over the resolved
+    claim set bucketed by ``canonical_id``; ``provenance`` resolves a claim
+    reference (id, then text) back to its source span.
+
+    The retriever and the consensus claim set are both supplied at construction
+    so this object never touches a heavy dep — :meth:`from_graph_store` builds
+    one from a graph store + embedder + the resolved claims/event-times the
+    pipeline already produced.
+    """
+
+    def __init__(
+        self,
+        retriever: HybridRetriever,
+        *,
+        consensus_claims: "list[ExtractedClaim]" | None = None,
+        event_times: dict[str, datetime] | None = None,
+    ) -> None:
+        self._retriever = retriever
+        self._consensus_claims = list(consensus_claims or [])
+        self._event_times = dict(event_times or {})
+
+    @classmethod
+    def from_graph_store(
+        cls,
+        store: object,
+        embedder: "Embedder",
+        *,
+        consensus_claims: "list[ExtractedClaim]" | None = None,
+        event_times: dict[str, datetime] | None = None,
+        **retriever_kwargs: object,
+    ) -> "GraphRetrievalSurface":
+        """Build a surface from a graph store + embedder (the wiring entry point).
+
+        Materializes :class:`~dlogos.retrieval.hybrid.RetrievableClaim`\\ s from
+        the store (live rows + one-hop adjacency) via
+        :func:`~dlogos.retrieval.hybrid.claims_from_graph_store`, wraps them in an
+        in-memory retrieval store, and constructs a
+        :class:`~dlogos.retrieval.hybrid.HybridRetriever`. The resolved
+        ``consensus_claims`` (the same ``ExtractedClaim``\\ s loaded into the
+        graph) and their ``event_times`` power the consensus primitive, which
+        needs stance/sentiment/confidence the flattened graph rows do not carry.
+        """
+
+        from dlogos.retrieval.hybrid import (
+            claims_from_graph_store,
+            in_memory_store,
+        )
+
+        retrievable = claims_from_graph_store(store, embedder=embedder)
+        retriever = HybridRetriever(
+            in_memory_store(retrievable),
+            embedder,
+            **retriever_kwargs,  # type: ignore[arg-type]
+        )
+        return cls(
+            retriever,
+            consensus_claims=consensus_claims,
+            event_times=event_times,
+        )
+
+    # -- RetrievalSurface contract ----------------------------------------- #
+    def search(
+        self,
+        query: str,
+        *,
+        top_k: int = 10,
+        since: datetime | None = None,
+        until: datetime | None = None,
+    ) -> list[RetrievalResult]:
+        """Hybrid retrieval, optionally restricted to an event-time window."""
+
+        return self._retriever.retrieve(
+            query,
+            top_k=top_k,
+            as_of_start=since,
+            as_of_end=until,
+            temporal_mode=TemporalMode.event_time,
+        )
+
+    def consensus(self, subject: str, *, window_days: int = 30) -> ConsensusTrend:
+        """Consensus-over-time for a subject, bucketed at ``window_days``."""
+
+        return consensus_over_time(
+            self._consensus_claims,
+            self._event_times,
+            subject=subject,
+            bucket=timedelta(days=window_days),
+        )
+
+    def provenance(self, claim_ref: str) -> RetrievalResult | None:
+        """Resolve a claim reference (id first, then a text match) to its span."""
+
+        claims = self._retriever.store.all_claims()
+        for c in claims:
+            if c.claim_id == claim_ref:
+                return RetrievalResult(claim=c, score=1.0)
+        ref_lower = claim_ref.strip().lower()
+        if ref_lower:
+            for c in claims:
+                if ref_lower in c.text.lower():
+                    return RetrievalResult(claim=c, score=1.0)
+        return None
 
 
 # --------------------------------------------------------------------------- #

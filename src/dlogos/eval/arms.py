@@ -226,3 +226,161 @@ class ModelDLogosArm:
             user=f"dLogos evidence:\n{context}\n\nQuestion: {query.query_text}",
         )
         return Answer(arm=self.name, text=text, citations=list(citations))
+
+
+# --------------------------------------------------------------------------- #
+# Concrete retriever adapters — bridge the REAL retrieval surface to the arms
+# --------------------------------------------------------------------------- #
+@runtime_checkable
+class _SearchSurface(Protocol):
+    """The slice of a retrieval surface these adapters consume.
+
+    Matches :class:`dlogos.mcp.server.RetrievalSurface` (and its
+    ``GraphRetrievalSurface`` implementation) structurally, without importing it
+    — so arms stay decoupled and the import graph has no cycle.
+    """
+
+    def search(self, query: str, *, top_k: int = 10, since=None, until=None): ...
+
+    def consensus(self, subject: str, *, window_days: int = 30): ...
+
+
+def _citation_from_hit(hit: object) -> Citation | None:
+    """Project one :class:`~dlogos.retrieval.hybrid.RetrievalResult` to a Citation.
+
+    Returns ``None`` when the hit lacks a source span or a resolved speaker
+    (attribution is the point of a dLogos citation — an unattributed hit cannot
+    seed the speaker-verified check).
+    """
+
+    claim = getattr(hit, "claim", None)
+    if claim is None:
+        return None
+    span = getattr(claim, "source_span", None)
+    speaker_id = getattr(claim, "speaker_id", None)
+    if span is None or not speaker_id:
+        return None
+    return Citation(
+        episode_id=span.episode_id,
+        t_start=span.t_start,
+        t_end=span.t_end,
+        speaker_id=speaker_id,
+        snippet=getattr(claim, "text", "") or "",
+    )
+
+
+class GraphVectorRetriever:
+    """Arm-3 adapter: *dumb* top-k retrieval over the SAME graph claims.
+
+    Wraps a retrieval surface but uses ONLY its plain ``search`` (semantic +
+    lexical fusion over the flattened claims) — deliberately no consensus, no
+    temporal bucketing, no stance synthesis. This is the structure-free control
+    (spec §9 arm 3): it returns the top-k spans as citations so the
+    speaker-verified check can still bite on a topically-relevant-but-
+    misattributed span.
+    """
+
+    def __init__(self, surface: _SearchSurface, *, k: int = 8) -> None:
+        self._surface = surface
+        self._k = k
+
+    async def retrieve(self, query: str, *, k: int = 8) -> list[Citation]:
+        hits = self._surface.search(query, top_k=k or self._k)
+        out: list[Citation] = []
+        for hit in hits:
+            cit = _citation_from_hit(hit)
+            if cit is not None:
+                out.append(cit)
+        return out
+
+
+class DLogosGraphRetriever:
+    """Arm-4 adapter: the structured, temporal, attributed dLogos surface.
+
+    Wraps a retrieval surface and produces the two things
+    :class:`ModelDLogosArm` consumes: an *evidence context string* that
+    synthesizes the consensus-over-time across attributed speakers, and the
+    speaker-verified citations behind it.
+
+    The context is built by: (1) running ``search`` to find the relevant claims;
+    (2) taking the dominant subject ``canonical_id`` among the hits and running
+    ``consensus`` on it to get the per-bucket attributed trend; (3) rendering the
+    trend (direction + delta + the speaker cast + per-bucket sentiment) plus the
+    top attributed spans. This is exactly the temporal-consensus synthesis the
+    rubric elevates (§9).
+    """
+
+    def __init__(
+        self, surface: _SearchSurface, *, top_k: int = 8, window_days: int = 30
+    ) -> None:
+        self._surface = surface
+        self._top_k = top_k
+        self._window_days = window_days
+
+    async def query(self, query: str) -> tuple[str, list[Citation]]:
+        hits = self._surface.search(query, top_k=self._top_k)
+        citations: list[Citation] = []
+        for hit in hits:
+            cit = _citation_from_hit(hit)
+            if cit is not None:
+                citations.append(cit)
+
+        subject = self._dominant_subject(hits)
+        context = self._render_context(query, subject, hits)
+        return context, citations
+
+    @staticmethod
+    def _dominant_subject(hits: list) -> str | None:
+        """The most frequent subject ``canonical_id`` among the hits."""
+
+        counts: dict[str, int] = {}
+        for hit in hits:
+            claim = getattr(hit, "claim", None)
+            sid = getattr(claim, "subject_id", None) if claim is not None else None
+            if sid:
+                counts[sid] = counts.get(sid, 0) + 1
+        if not counts:
+            return None
+        # Ties broken by id for determinism.
+        return max(sorted(counts), key=lambda k: counts[k])
+
+    def _render_context(
+        self, query: str, subject: str | None, hits: list
+    ) -> str:
+        """Render the attributed consensus-over-time evidence block."""
+
+        lines: list[str] = []
+        if subject is not None:
+            trend = self._surface.consensus(
+                subject, window_days=self._window_days
+            )
+            lines.append(
+                f"Consensus on {trend.subject}: direction={trend.direction.value}, "
+                f"sentiment_delta={trend.sentiment_delta:+.2f}, "
+                f"attributed speakers={', '.join(trend.all_speakers) or '(none)'}."
+            )
+            for b in trend.buckets:
+                if b.claim_count == 0:
+                    continue
+                spk = ", ".join(b.speakers)
+                lines.append(
+                    f"  [{b.start.date()}..{b.end.date()}] "
+                    f"net_sentiment={b.net_sentiment:+.2f} "
+                    f"net_stance={b.net_stance:+.2f} by {spk}"
+                )
+
+        if hits:
+            lines.append("Attributed spans:")
+            for hit in hits:
+                claim = getattr(hit, "claim", None)
+                if claim is None:
+                    continue
+                span = getattr(claim, "source_span", None)
+                spk = getattr(claim, "speaker_id", None) or "(unattributed)"
+                text = getattr(claim, "text", "") or ""
+                if span is not None:
+                    lines.append(
+                        f"  {spk} @ {span.episode_id} "
+                        f"[{span.t_start:.1f}-{span.t_end:.1f}s]: {text}"
+                    )
+        return "\n".join(lines) or "(no dLogos evidence found)"
