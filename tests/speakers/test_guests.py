@@ -1,22 +1,27 @@
 """Tests for recurring-guest resolution.
 
-Deterministic: a fake :class:`WikidataClient` maps known names to fixed QIDs,
-so no network is touched. The headline cases — a repeated guest resolves across
-two episodes to one stable id, while a one-off guest stays per-episode — are
-covered directly, alongside the intro-pattern regex and the metadata signal.
+Deterministic: guest resolution depends on the SINGLE Wikidata module
+(:mod:`dlogos.resolution.wikidata`). We inject a real
+:class:`~dlogos.resolution.wikidata.WikidataLinker` over a fake
+:class:`~dlogos.resolution.wikidata.WikidataClient` (canned candidate lists),
+so no network is touched and the consolidation path is exercised end-to-end.
+The headline cases — a repeated guest resolves across two episodes to one
+stable QID-derived id, while a one-off guest stays per-episode — are covered
+directly, alongside the intro-pattern regex and the metadata signal.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Any
+
 import pytest
 
-from dlogos.schema import SpeakerRef, Transcript, TranscriptSegment
+from dlogos.resolution.wikidata import WikidataClient, WikidataLinker, WikidataMatch
+from dlogos.schema import EntityType, SpeakerRef, Transcript, TranscriptSegment
 from dlogos.speakers.guests import (
     GuestCandidate,
     GuestResolver,
-    HttpxWikidataClient,
-    WikidataClient,
-    WikidataMatch,
     apply_guest_resolution,
     extract_intro_names,
 )
@@ -25,20 +30,31 @@ from dlogos.speakers.guests import (
 # --------------------------------------------------------------------------- #
 # Fakes + helpers
 # --------------------------------------------------------------------------- #
-class FakeWikidata:
-    """Maps known person names to fixed QIDs; everything else misses."""
+class FakeWikidataClient:
+    """Deterministic, offline Wikidata client returning canned candidates.
 
-    _TABLE = {
-        "jane doe": WikidataMatch(qid="Q111", label="Jane Doe", description="economist"),
-        "sam patel": WikidataMatch(qid="Q222", label="Sam Patel", description="AI researcher"),
+    Implements the single canonical ``WikidataClient`` protocol (``search`` ->
+    list of candidate dicts). Records calls so tests can assert that unresolved
+    (one-off) guests never incur a lookup and that domain context is forwarded.
+    """
+
+    _DB: dict[str, list[dict[str, Any]]] = {
+        "jane doe": [
+            {"id": "Q111", "label": "Jane Doe", "description": "economist"},
+        ],
+        "sam patel": [
+            {"id": "Q222", "label": "Sam Patel", "description": "AI researcher"},
+        ],
     }
 
     def __init__(self) -> None:
-        self.calls: list[tuple[str, tuple[str, ...]]] = []
+        self.calls: list[tuple[str, EntityType | None]] = []
 
-    def lookup(self, name: str, context=None) -> WikidataMatch | None:
-        self.calls.append((name, tuple(context or [])))
-        return self._TABLE.get(name.strip().lower())
+    def search(
+        self, name: str, *, entity_type: EntityType | None = None, limit: int = 5
+    ) -> list[dict[str, Any]]:
+        self.calls.append((name, entity_type))
+        return list(self._DB.get(name.strip().lower(), []))
 
 
 def _transcript(episode_id: str, intro_text: str, guest_text: str) -> Transcript:
@@ -54,8 +70,15 @@ def _transcript(episode_id: str, intro_text: str, guest_text: str) -> Transcript
 
 
 @pytest.fixture
-def wikidata() -> FakeWikidata:
-    return FakeWikidata()
+def client() -> FakeWikidataClient:
+    return FakeWikidataClient()
+
+
+@pytest.fixture
+def linker(client: FakeWikidataClient) -> WikidataLinker:
+    """A real linker over the fake client — the single Wikidata module."""
+
+    return WikidataLinker(client)
 
 
 # --------------------------------------------------------------------------- #
@@ -96,10 +119,12 @@ def test_intro_dedupes_repeated_name() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Headline: repeated guest resolves across two episodes
+# Headline: a recurring guest resolves to one stable QID across two episodes
 # --------------------------------------------------------------------------- #
-def test_repeated_guest_resolves_across_two_episodes(wikidata: FakeWikidata) -> None:
-    resolver = GuestResolver(wikidata=wikidata, min_appearances=2)
+def test_repeated_guest_resolves_qid_via_resolution_wikidata(
+    linker: WikidataLinker,
+) -> None:
+    resolver = GuestResolver(wikidata=linker, min_appearances=2)
     resolver.add_episode(
         _transcript("ep-1", "My guest today is Jane Doe.", "Thanks."),
         show_id="show-1",
@@ -116,9 +141,14 @@ def test_repeated_guest_resolves_across_two_episodes(wikidata: FakeWikidata) -> 
     results = {r.name: r for r in resolver.resolve()}
     jane = results["Jane Doe"]
     assert jane.is_resolved
+    # The stable id is derived from the Wikidata QID returned by the single
+    # resolution.wikidata module.
     assert jane.resolved.speaker_id == "guest-Q111"
     assert jane.resolved.wikidata_qid == "Q111"
     assert jane.resolved.is_host is False
+    # The match carried on the resolution is the canonical WikidataMatch type.
+    assert isinstance(jane.wikidata, WikidataMatch)
+    assert jane.wikidata.qid == "Q111"
     # Resolved across both episodes / both shows.
     assert set(jane.episode_ids) == {"ep-1", "ep-2"}
     assert set(jane.resolved.show_ids) == {"show-1", "show-2"}
@@ -127,8 +157,8 @@ def test_repeated_guest_resolves_across_two_episodes(wikidata: FakeWikidata) -> 
 # --------------------------------------------------------------------------- #
 # Headline: one-off guest stays per-episode (long tail)
 # --------------------------------------------------------------------------- #
-def test_one_off_guest_stays_per_episode(wikidata: FakeWikidata) -> None:
-    resolver = GuestResolver(wikidata=wikidata, min_appearances=2)
+def test_one_off_guest_stays_per_episode(linker: WikidataLinker) -> None:
+    resolver = GuestResolver(wikidata=linker, min_appearances=2)
     resolver.add_episode(
         _transcript("ep-1", "My guest today is Sam Patel.", "Hello."),
         show_id="show-1",
@@ -140,8 +170,10 @@ def test_one_off_guest_stays_per_episode(wikidata: FakeWikidata) -> None:
     assert sam.resolved is None
 
 
-def test_recurring_but_unknown_to_wikidata_stays_per_episode(wikidata: FakeWikidata) -> None:
-    resolver = GuestResolver(wikidata=wikidata, min_appearances=2)
+def test_recurring_but_unknown_to_wikidata_stays_per_episode(
+    linker: WikidataLinker,
+) -> None:
+    resolver = GuestResolver(wikidata=linker, min_appearances=2)
     for ep in ("ep-1", "ep-2"):
         resolver.add_episode(
             _transcript(ep, "My guest today is Nobody Famous.", "Hi."),
@@ -156,7 +188,8 @@ def test_recurring_but_unknown_to_wikidata_stays_per_episode(wikidata: FakeWikid
 
 
 def test_require_wikidata_false_promotes_recurring_unknown() -> None:
-    resolver = GuestResolver(wikidata=FakeWikidata(), min_appearances=2, require_wikidata=False)
+    linker = WikidataLinker(FakeWikidataClient())
+    resolver = GuestResolver(wikidata=linker, min_appearances=2, require_wikidata=False)
     for ep in ("ep-1", "ep-2"):
         resolver.add_episode(
             _transcript(ep, "My guest today is Nobody Famous.", "Hi."),
@@ -172,8 +205,8 @@ def test_require_wikidata_false_promotes_recurring_unknown() -> None:
 # --------------------------------------------------------------------------- #
 # Signals: metadata, both-signal flags, context passed to Wikidata
 # --------------------------------------------------------------------------- #
-def test_metadata_only_signal_counts(wikidata: FakeWikidata) -> None:
-    resolver = GuestResolver(wikidata=wikidata, min_appearances=2)
+def test_metadata_only_signal_counts(linker: WikidataLinker) -> None:
+    resolver = GuestResolver(wikidata=linker, min_appearances=2)
     for ep in ("ep-1", "ep-2"):
         resolver.add_episode(
             _transcript(ep, "Welcome back, everyone.", "Glad to be here."),
@@ -186,8 +219,8 @@ def test_metadata_only_signal_counts(wikidata: FakeWikidata) -> None:
     assert all(a.from_metadata and not a.from_intro for a in jane.appearances)
 
 
-def test_both_signals_flagged(wikidata: FakeWikidata) -> None:
-    resolver = GuestResolver(wikidata=wikidata, min_appearances=1)
+def test_both_signals_flagged(linker: WikidataLinker) -> None:
+    resolver = GuestResolver(wikidata=linker, min_appearances=1)
     added = resolver.add_episode(
         _transcript("ep-1", "My guest today is Jane Doe.", "Hi."),
         show_id="show-1",
@@ -198,8 +231,28 @@ def test_both_signals_flagged(wikidata: FakeWikidata) -> None:
     assert added[0].from_metadata and added[0].from_intro
 
 
-def test_context_forwarded_to_wikidata(wikidata: FakeWikidata) -> None:
-    resolver = GuestResolver(wikidata=wikidata, min_appearances=2)
+def test_context_forwarded_to_wikidata(client: FakeWikidataClient) -> None:
+    # The fake client only sees the name + type via ``search`` (context is used
+    # inside the linker's matcher). To assert context reached the resolution
+    # layer, use a context-sensitive candidate set where the domain hint picks a
+    # different QID than relevance ordering would.
+    class ContextClient:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, EntityType | None]] = []
+
+        def search(
+            self, name: str, *, entity_type: EntityType | None = None, limit: int = 5
+        ) -> list[dict[str, Any]]:
+            self.calls.append((name, entity_type))
+            if name.strip().lower() == "jane doe":
+                return [
+                    {"id": "Q999", "label": "Jane Doe", "description": "actor"},
+                    {"id": "Q111", "label": "Jane Doe", "description": "finance economist"},
+                ]
+            return []
+
+    cc = ContextClient()
+    resolver = GuestResolver(wikidata=WikidataLinker(cc), min_appearances=2)
     for ep in ("ep-1", "ep-2"):
         resolver.add_episode(
             _transcript(ep, "My guest today is Jane Doe.", "Hi."),
@@ -207,29 +260,31 @@ def test_context_forwarded_to_wikidata(wikidata: FakeWikidata) -> None:
             guest_label="SPEAKER_01",
             context=["finance", "economics"],
         )
-    resolver.resolve()
-    # The disambiguation context reached the client.
-    assert any("finance" in ctx for _, ctx in wikidata.calls)
+    jane = {r.name: r for r in resolver.resolve()}["Jane Doe"]
+    # The "finance" domain hint disambiguated to the economist (Q111), not the
+    # relevance-first actor (Q999) — context reached the linker's matcher.
+    assert jane.resolved.wikidata_qid == "Q111"
+    assert cc.calls and cc.calls[0][1] == EntityType.person
 
 
-def test_unresolved_guest_not_looked_up(wikidata: FakeWikidata) -> None:
+def test_unresolved_guest_not_looked_up(client: FakeWikidataClient) -> None:
     """A one-off name must not trigger a (costly) Wikidata call."""
 
-    resolver = GuestResolver(wikidata=wikidata, min_appearances=2)
+    resolver = GuestResolver(wikidata=WikidataLinker(client), min_appearances=2)
     resolver.add_episode(
         _transcript("ep-1", "My guest today is Sam Patel.", "Hi."),
         show_id="show-1",
         guest_label="SPEAKER_01",
     )
     resolver.resolve()
-    assert wikidata.calls == []
+    assert client.calls == []
 
 
 # --------------------------------------------------------------------------- #
 # Writing resolution back onto SpeakerRefs
 # --------------------------------------------------------------------------- #
-def test_apply_guest_resolution_writes_back(wikidata: FakeWikidata) -> None:
-    resolver = GuestResolver(wikidata=wikidata, min_appearances=2)
+def test_apply_guest_resolution_writes_back(linker: WikidataLinker) -> None:
+    resolver = GuestResolver(wikidata=linker, min_appearances=2)
     resolver.add_episode(
         _transcript("ep-1", "My guest today is Jane Doe.", "Hi."),
         show_id="show-1",
@@ -253,8 +308,8 @@ def test_apply_guest_resolution_writes_back(wikidata: FakeWikidata) -> None:
     assert refs[1].name == "Jane Doe"
 
 
-def test_apply_guest_resolution_noop_when_unresolved(wikidata: FakeWikidata) -> None:
-    resolver = GuestResolver(wikidata=wikidata, min_appearances=2)
+def test_apply_guest_resolution_noop_when_unresolved(linker: WikidataLinker) -> None:
+    resolver = GuestResolver(wikidata=linker, min_appearances=2)
     resolver.add_episode(
         _transcript("ep-1", "My guest today is Sam Patel.", "Hi."),
         show_id="show-1",
@@ -266,8 +321,8 @@ def test_apply_guest_resolution_noop_when_unresolved(wikidata: FakeWikidata) -> 
     assert refs[0].resolved_id is None
 
 
-def test_resolution_for_other_episode_is_none(wikidata: FakeWikidata) -> None:
-    resolver = GuestResolver(wikidata=wikidata, min_appearances=2)
+def test_resolution_for_other_episode_is_none(linker: WikidataLinker) -> None:
+    resolver = GuestResolver(wikidata=linker, min_appearances=2)
     for ep in ("ep-1", "ep-2"):
         resolver.add_episode(
             _transcript(ep, "My guest today is Jane Doe.", "Hi."),
@@ -280,15 +335,47 @@ def test_resolution_for_other_episode_is_none(wikidata: FakeWikidata) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Protocol conformance + lazy httpx default
+# Single-module guarantee: guests depends on the one Wikidata module and does
+# not define a second Wikidata client/implementation.
 # --------------------------------------------------------------------------- #
-def test_fake_satisfies_protocol(wikidata: FakeWikidata) -> None:
-    assert isinstance(wikidata, WikidataClient)
-
-
-def test_httpx_client_does_not_import_at_module_load() -> None:
-    # Constructing the default client must not require httpx at import time;
-    # httpx is imported lazily inside lookup(). Construction alone is cheap.
-    client = HttpxWikidataClient()
-    assert client.endpoint.startswith("https://")
+def test_fake_client_satisfies_canonical_protocol(client: FakeWikidataClient) -> None:
     assert isinstance(client, WikidataClient)
+
+
+def test_guests_does_not_define_a_second_wikidata_client() -> None:
+    """Grep guard: only ONE module defines a Wikidata client.
+
+    guests.py must re-use :mod:`dlogos.resolution.wikidata`, never define its
+    own ``class WikidataClient`` / ``class HttpxWikidataClient`` / Wikidata
+    ``WikidataMatch``. We scan the source for class definitions to lock the
+    consolidation in.
+    """
+
+    src_root = Path(__file__).resolve().parents[2] / "src" / "dlogos"
+    guests_src = (src_root / "speakers" / "guests.py").read_text()
+    # No local class definitions of any Wikidata type in guests.py.
+    for forbidden in (
+        "class WikidataClient",
+        "class HttpxWikidataClient",
+        "class WikidataMatch",
+        "class WikidataLinker",
+    ):
+        assert forbidden not in guests_src, (
+            f"guests.py must not define {forbidden!r}; it must import the single "
+            "Wikidata module dlogos.resolution.wikidata"
+        )
+
+    # Across the whole source tree exactly one module defines a Wikidata client
+    # protocol/class — resolution/wikidata.py.
+    definers = sorted(
+        p.relative_to(src_root).as_posix()
+        for p in src_root.rglob("*.py")
+        if "class WikidataClient" in p.read_text()
+    )
+    assert definers == ["resolution/wikidata.py"], definers
+
+
+def test_guests_imports_from_resolution_wikidata() -> None:
+    src_root = Path(__file__).resolve().parents[2] / "src" / "dlogos"
+    guests_src = (src_root / "speakers" / "guests.py").read_text()
+    assert "from dlogos.resolution.wikidata import" in guests_src

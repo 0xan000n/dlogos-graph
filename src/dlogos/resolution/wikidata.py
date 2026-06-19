@@ -49,7 +49,11 @@ class WikidataClient(Protocol):
     """
 
     def search(
-        self, name: str, *, entity_type: EntityType | None = None, limit: int = 5
+        self,
+        name: str,
+        *,
+        entity_type: EntityType | None = None,
+        limit: int = 5,
     ) -> list[dict[str, Any]]:  # pragma: no cover - protocol
         ...
 
@@ -170,8 +174,23 @@ class WikidataLinker:
     def _norm(name: str) -> str:
         return " ".join(name.strip().split()).casefold()
 
-    def link(self, name: str, entity_type: EntityType) -> WikidataMatch:
-        """Resolve one name to a :class:`WikidataMatch` (qid may be ``None``)."""
+    def link(
+        self,
+        name: str,
+        entity_type: EntityType,
+        *,
+        context: Sequence[str] | None = None,
+    ) -> WikidataMatch:
+        """Resolve one name to a :class:`WikidataMatch` (qid may be ``None``).
+
+        ``context`` is an optional set of domain hints (e.g. a show's domain
+        tags). When provided, a candidate whose description overlaps the
+        context is preferred over the raw relevance-ranked top hit — this is the
+        recurring-guest disambiguation lever (spec §7.3). Without context the
+        matcher trusts ``wbsearchentities``' relevance ordering. Caching keys on
+        ``(name, type)`` only; the first context seen for a name wins, which is
+        fine because a recurring guest's domain is stable across episodes.
+        """
 
         clean = name.strip()
         if not clean or entity_type not in self._linkable:
@@ -184,7 +203,7 @@ class WikidataLinker:
         candidates = self._ensure_client().search(
             clean, entity_type=entity_type, limit=5
         )
-        match = self._pick(clean, candidates)
+        match = self._pick(clean, candidates, context=context)
         self._cache[cache_key] = match
         return match
 
@@ -203,23 +222,39 @@ class WikidataLinker:
         return entity.model_copy()
 
     @staticmethod
-    def _pick(name: str, candidates: Sequence[dict[str, Any]]) -> WikidataMatch:
+    def _pick(
+        name: str,
+        candidates: Sequence[dict[str, Any]],
+        *,
+        context: Sequence[str] | None = None,
+    ) -> WikidataMatch:
         """Choose the best candidate conservatively.
 
-        Take the first candidate — ``wbsearchentities`` already ranks by
+        Default to the first candidate — ``wbsearchentities`` already ranks by
         relevance, so the top hit is the intended sense (e.g. "Apple" ->
         *Apple Inc.*, not the fruit). We deliberately do NOT prefer an exact
         case-insensitive *label* match: a lower-relevance homonym whose label
         happens to equal the query (the fruit "apple") would otherwise hijack
         the link, which is exactly the wrong-canonical-id failure we want to
-        avoid. Require a usable QID; return ``None`` qid if the list is empty
-        or malformed.
+        avoid.
+
+        When ``context`` (domain hints) is supplied, prefer the first candidate
+        whose ``description`` overlaps a hint — this disambiguates a recurring
+        guest by the show's domain without trusting label equality. Require a
+        usable QID; return ``None`` qid if the list is empty or malformed.
         """
 
         if not candidates:
             return WikidataMatch(name=name, qid=None)
 
         chosen = candidates[0]
+        if context:
+            hints = {h.lower() for h in context if h}
+            for cand in candidates:
+                desc = str(cand.get("description") or "").lower()
+                if desc and any(hint in desc for hint in hints):
+                    chosen = cand
+                    break
         qid = chosen.get("id")
         if not isinstance(qid, str) or not qid:
             return WikidataMatch(name=name, qid=None)

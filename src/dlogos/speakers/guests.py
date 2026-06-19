@@ -12,8 +12,10 @@ cheap signals, none of which alone is reliable:
    guest's diarization label for that episode.
 3. **A Wikidata match** — canonicalize the parsed name to a stable Wikidata
    **QID**, disambiguated by domain context, so the same person merges across
-   shows. The Wikidata client uses ``httpx`` *lazily* (imported inside the
-   method) and is *injectable*, so unit tests pass a fake and hit no network.
+   shows. This reuses the single Wikidata module
+   (:mod:`dlogos.resolution.wikidata`): a :class:`~dlogos.resolution.wikidata.WikidataLinker`
+   is *injected*, its underlying client uses ``httpx`` *lazily*, so unit tests
+   pass a fake linker (or a linker over a fake client) and hit no network.
 
 Policy (spec §7.3): a guest that recurs across ``min_appearances`` episodes
 *and* canonicalizes to a Wikidata QID is promoted to a stable
@@ -27,10 +29,30 @@ from __future__ import annotations
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Protocol, runtime_checkable
 
-from dlogos.schema import SpeakerRef, Transcript
+from dlogos.resolution.wikidata import (
+    WikidataClient,
+    WikidataLinker,
+    WikidataMatch,
+)
+from dlogos.schema import EntityType, SpeakerRef, Transcript
 from dlogos.speakers.identity import CanonicalSpeaker, SpeakerResolution
+
+# ``WikidataClient`` / ``WikidataLinker`` / ``WikidataMatch`` are the single
+# canonical Wikidata types (defined in :mod:`dlogos.resolution.wikidata`). They
+# are re-exported here only so importers of the speakers package keep working;
+# this module no longer defines its own Wikidata client — there is exactly one
+# implementation in the codebase.
+__all__ = [
+    "GuestCandidate",
+    "GuestResolution",
+    "GuestResolver",
+    "WikidataClient",
+    "WikidataLinker",
+    "WikidataMatch",
+    "apply_guest_resolution",
+    "extract_intro_names",
+]
 
 # --------------------------------------------------------------------------- #
 # Intro-pattern extraction
@@ -90,95 +112,6 @@ def extract_intro_names(transcript: Transcript) -> list[str]:
 
 
 # --------------------------------------------------------------------------- #
-# Wikidata canonicalization (lazy httpx, injectable)
-# --------------------------------------------------------------------------- #
-@dataclass(frozen=True)
-class WikidataMatch:
-    """A canonicalization result for a guest name."""
-
-    qid: str
-    label: str
-    description: str | None = None
-
-
-@runtime_checkable
-class WikidataClient(Protocol):
-    """Maps a person name (+ optional domain context) to a Wikidata QID.
-
-    Production hits the Wikidata SPARQL/entity-search endpoint; tests inject a
-    fake. ``context`` carries domain hints (e.g. the show's domain tags) for
-    disambiguation. Returns ``None`` when no confident match exists.
-    """
-
-    def lookup(
-        self, name: str, context: list[str] | None = None
-    ) -> WikidataMatch | None:  # pragma: no cover - protocol
-        ...
-
-
-class HttpxWikidataClient:
-    """Default :class:`WikidataClient` over the Wikidata entity-search API.
-
-    ``httpx`` is imported **lazily** inside :meth:`lookup` so importing this
-    module (and the whole speakers package) never requires it. This client is
-    *not* exercised by unit tests — tests inject a fake — so the network path
-    stays out of the deterministic suite.
-    """
-
-    def __init__(
-        self,
-        endpoint: str = "https://www.wikidata.org/w/api.php",
-        *,
-        timeout: float = 10.0,
-        language: str = "en",
-    ) -> None:
-        self.endpoint = endpoint
-        self.timeout = timeout
-        self.language = language
-
-    def lookup(
-        self, name: str, context: list[str] | None = None
-    ) -> WikidataMatch | None:
-        import httpx  # lazy: keep core import-light
-
-        params = {
-            "action": "wbsearchentities",
-            "search": name,
-            "language": self.language,
-            "format": "json",
-            "type": "item",
-            "limit": 5,
-        }
-        try:
-            resp = httpx.get(self.endpoint, params=params, timeout=self.timeout)
-            resp.raise_for_status()
-            data = resp.json()
-        except Exception:  # network/parse failure → no confident match
-            return None
-
-        hits = data.get("search") or []
-        if not hits:
-            return None
-
-        # Prefer a hit whose description overlaps the domain context; else the
-        # top-ranked hit (the API already returns best-match-first).
-        chosen = hits[0]
-        if context:
-            ctx = {c.lower() for c in context}
-            for hit in hits:
-                desc = (hit.get("description") or "").lower()
-                if any(token in desc for token in ctx):
-                    chosen = hit
-                    break
-
-        return WikidataMatch(
-            qid=chosen["id"],
-            label=chosen.get("label", name),
-            description=chosen.get("description"),
-        )
-
-
-# --------------------------------------------------------------------------- #
 # Candidate aggregation across episodes
 # --------------------------------------------------------------------------- #
 @dataclass(frozen=True)
@@ -212,6 +145,9 @@ class GuestResolution:
     name: str
     appearances: tuple[GuestCandidate, ...]
     resolved: CanonicalSpeaker | None
+    # The Wikidata link for this guest, or ``None`` when no QID was found
+    # (a :class:`~dlogos.resolution.wikidata.WikidataMatch` always carries the
+    # queried name; we store ``None`` here to keep the "unmatched" signal crisp).
     wikidata: WikidataMatch | None
 
     @property
@@ -257,9 +193,11 @@ def _slug(name: str) -> str:
 class GuestResolver:
     """Resolves recurring guests; leaves the long tail per-episode.
 
-    Inject a :class:`WikidataClient` (a fake in tests). Feed per-episode
-    candidates via :meth:`add_episode` (which combines the metadata names and
-    the parsed intro names for that episode), then call :meth:`resolve`.
+    Inject a :class:`~dlogos.resolution.wikidata.WikidataLinker` (over a fake
+    client in tests) — the single Wikidata module the whole pipeline shares.
+    Feed per-episode candidates via :meth:`add_episode` (which combines the
+    metadata names and the parsed intro names for that episode), then call
+    :meth:`resolve`.
 
     A guest is promoted to a stable id only when it appears in at least
     ``min_appearances`` distinct episodes **and** Wikidata returns a QID — both
@@ -267,7 +205,7 @@ class GuestResolver:
     identifiable name, is not safe to merge across shows at PoC scale.
     """
 
-    wikidata: WikidataClient
+    wikidata: WikidataLinker
     min_appearances: int = 2
     require_wikidata: bool = True
     _candidates: dict[str, list[GuestCandidate]] = field(
@@ -333,6 +271,9 @@ class GuestResolver:
             recurring = len(episodes) >= self.min_appearances
 
             display = self._display_name(appearances)
+            # A QID-bearing link, or ``None`` when Wikidata had no confident
+            # match. Only looked up for recurring guests (one-offs never incur
+            # the cost — the long tail stays per-episode).
             match: WikidataMatch | None = None
             if recurring:
                 # Merge domain context across appearances for disambiguation.
@@ -341,7 +282,11 @@ class GuestResolver:
                         c for a in appearances for c in a.context
                     )
                 )
-                match = self.wikidata.lookup(display, ctx or None)
+                linked = self.wikidata.link(
+                    display, EntityType.person, context=ctx or None
+                )
+                if linked.qid is not None:
+                    match = linked
 
             resolved: CanonicalSpeaker | None = None
             if recurring and (match is not None or not self.require_wikidata):
@@ -353,7 +298,7 @@ class GuestResolver:
                 )
                 resolved = CanonicalSpeaker(
                     speaker_id=speaker_id,
-                    name=match.label if match else display,
+                    name=(match.label or display) if match else display,
                     is_host=False,
                     show_ids=show_ids,
                     wikidata_qid=match.qid if match else None,

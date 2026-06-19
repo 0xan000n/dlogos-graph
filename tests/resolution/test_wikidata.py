@@ -167,6 +167,49 @@ def test_link_entities_batch_is_deterministic_and_ordered():
 
 
 # --------------------------------------------------------------------------- #
+# Domain-context disambiguation (recurring-guest lever; spec §7.3)
+# --------------------------------------------------------------------------- #
+class _MultiSenseClient:
+    """Returns two same-name senses so context can pick the intended one."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, EntityType | None]] = []
+
+    def search(
+        self, name: str, *, entity_type: EntityType | None = None, limit: int = 5
+    ) -> list[dict[str, Any]]:
+        self.calls.append((name, entity_type))
+        if name.strip().casefold() == "jane doe":
+            return [
+                {"id": "Q999", "label": "Jane Doe", "description": "actor"},
+                {"id": "Q111", "label": "Jane Doe", "description": "finance economist"},
+            ]
+        return []
+
+
+def test_context_disambiguates_to_matching_sense():
+    linker = WikidataLinker(_MultiSenseClient())
+    match = linker.link("Jane Doe", EntityType.person, context=["finance"])
+    # The "finance" hint overrides relevance ordering (which would pick Q999).
+    assert match.qid == "Q111"
+    assert match.description == "finance economist"
+
+
+def test_no_context_trusts_relevance_ordering():
+    linker = WikidataLinker(_MultiSenseClient())
+    match = linker.link("Jane Doe", EntityType.person)
+    # Without context the top relevance hit wins.
+    assert match.qid == "Q999"
+
+
+def test_context_without_overlap_falls_back_to_relevance():
+    linker = WikidataLinker(_MultiSenseClient())
+    match = linker.link("Jane Doe", EntityType.person, context=["sports"])
+    # No description overlaps "sports" → keep the relevance-first hit.
+    assert match.qid == "Q999"
+
+
+# --------------------------------------------------------------------------- #
 # Protocol + no-network guarantees
 # --------------------------------------------------------------------------- #
 def test_fake_client_satisfies_protocol():
