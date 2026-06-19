@@ -109,11 +109,61 @@ def _overlap(a_start: float, a_end: float, b_start: float, b_end: float) -> floa
     return max(0.0, min(a_end, b_end) - max(a_start, b_start))
 
 
+def crosstalk_regions(turns: list[DiarizationTurn]) -> list[tuple[float, float]]:
+    """Return the time regions where two or more *distinct* speakers overlap.
+
+    Crosstalk — two people talking at once — is the failure the talk-time helper
+    *cannot* catch (both speakers are genuinely present), so we surface it so the
+    mapping can flag a low-confidence attribution. A region is reported only when
+    the overlapping turns carry **different** labels; two turns with the same
+    label (a diarizer emitting a split for one speaker) is not crosstalk.
+
+    Returns a list of ``(start, end)`` intervals, sorted and non-overlapping
+    (merged where adjacent), so a word's overlap with "any crosstalk" is a
+    single membership test. Pure / heavy-dep-free.
+    """
+
+    raw: list[tuple[float, float]] = []
+    for i, a in enumerate(turns):
+        for b in turns[i + 1 :]:
+            if a.speaker == b.speaker:
+                continue
+            lo = max(a.start, b.start)
+            hi = min(a.end, b.end)
+            if hi > lo:
+                raw.append((lo, hi))
+
+    if not raw:
+        return []
+
+    raw.sort()
+    merged: list[tuple[float, float]] = [raw[0]]
+    for lo, hi in raw[1:]:
+        last_lo, last_hi = merged[-1]
+        if lo <= last_hi:
+            merged[-1] = (last_lo, max(last_hi, hi))
+        else:
+            merged.append((lo, hi))
+    return merged
+
+
+def _in_any_region(
+    start: float, end: float, regions: list[tuple[float, float]]
+) -> bool:
+    """Does ``[start, end]`` overlap any region in ``regions`` (positive width)?"""
+
+    for r_lo, r_hi in regions:
+        if min(end, r_hi) > max(start, r_lo):
+            return True
+    return False
+
+
 def map_words_to_speakers(
     words: list[dict],
     turns: list[DiarizationTurn],
     *,
     default_speaker: str = "SPEAKER_00",
+    flag_crosstalk: bool = False,
 ) -> list[dict]:
     """Attribute each word to a diarization turn by timing overlap.
 
@@ -131,6 +181,16 @@ def map_words_to_speakers(
         complete; downstream talk-time pruning can still remove a spurious
         catch-all label if it stays tiny.
 
+    flag_crosstalk:
+        When set, each returned word also gains a boolean ``"crosstalk"`` key:
+        ``True`` if the word's interval overlaps a region where two *distinct*
+        diarization labels are simultaneously active (see
+        :func:`crosstalk_regions`). This is the one failure the talk-time helper
+        cannot catch — under crosstalk the winning label can be the wrong
+        speaker even though the overlap math is correct — so the flag marks the
+        attribution as low-confidence for the downstream speaker-verified check.
+        The chosen ``"speaker"`` is unchanged whether or not the flag is set.
+
     Assignment rule: pick the turn with the **largest temporal overlap** with
     the word. Ties (equal overlap) break toward the **earlier-starting** turn,
     then the lexicographically smaller label, so the mapping is fully
@@ -141,7 +201,14 @@ def map_words_to_speakers(
     Pure and deterministic — no heavy deps, directly unit tested.
     """
 
+    regions = crosstalk_regions(turns) if flag_crosstalk else []
+
     if not turns:
+        if flag_crosstalk:
+            return [
+                {**w, "speaker": default_speaker, "crosstalk": False}
+                for w in words
+            ]
         return [
             {**w, "speaker": default_speaker}
             for w in words
@@ -181,7 +248,10 @@ def map_words_to_speakers(
                 nearest_label = turn.speaker
 
         speaker = best_label if best_overlap > 0.0 else nearest_label
-        out.append({**word, "speaker": speaker})
+        mapped = {**word, "speaker": speaker}
+        if flag_crosstalk:
+            mapped["crosstalk"] = _in_any_region(w_start, w_end, regions)
+        out.append(mapped)
 
     return out
 
