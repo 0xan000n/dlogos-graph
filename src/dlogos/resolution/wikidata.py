@@ -1,0 +1,247 @@
+"""Lightweight Wikidata linking (spec §7.4a lever ii / §7.3).
+
+Recurring guests (and well-known orgs/people that subjects refer to) are
+belief-tracking subjects: "what does *[guest]* believe about X, and has it
+changed?" only works if the same person merges across shows under one stable
+id. The cheap, deterministic signal for that stable id is a **Wikidata QID**.
+
+This module canonicalizes a name (+ optional type/domain context) to a QID via
+Wikidata's public ``wbsearchentities`` API. The HTTP transport is fully
+INJECTABLE and the real network client is built LAZILY, so:
+
+- unit tests pass a fake client and never touch the network;
+- importing this module never opens a connection or requires credentials.
+
+The matcher is intentionally conservative — it returns the top candidate whose
+type is compatible (people/orgs only; concepts/works are skipped because the
+PoC tracks beliefs of *speakers* and consensus about *named entities*, and
+Wikidata disambiguation for generic concepts is noisy). No match yields
+``None`` rather than a wrong QID — a wrong canonical id is worse than none.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Iterable, Sequence
+from typing import Any, Protocol, runtime_checkable
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from dlogos.config import settings
+from dlogos.schema import Entity, EntityType
+
+# Wikidata's wbsearchentities accepts a free-text search; we keep the surface
+# of the call small and dependency-free so the fake client is trivial.
+_SEARCH_ACTION = "wbsearchentities"
+_DEFAULT_LANGUAGE = "en"
+# Only these entity types are linked; concepts/works are intentionally skipped.
+_LINKABLE_TYPES = frozenset({EntityType.person, EntityType.organization})
+
+
+@runtime_checkable
+class WikidataClient(Protocol):
+    """Transport contract: name (+ optional type) -> list of candidate dicts.
+
+    A candidate is a mapping with at least ``id`` (the QID, e.g. ``"Q312"``)
+    and ``label``; ``description`` is used for light disambiguation when
+    present. The real implementation hits the Wikidata API; tests inject a
+    fake returning canned candidates. Keeping the contract at the
+    "list of candidates" level (not raw HTTP) means the fake stays tiny.
+    """
+
+    def search(
+        self, name: str, *, entity_type: EntityType | None = None, limit: int = 5
+    ) -> list[dict[str, Any]]:  # pragma: no cover - protocol
+        ...
+
+
+class _HttpxWikidataClient:
+    """Real client over the Wikidata public API — httpx imported LAZILY.
+
+    Not used in unit tests (they inject a fake). The ``httpx`` import lives
+    inside ``__init__`` so importing this module costs nothing and needs no
+    network; ``httpx`` is a core dep but we still keep the boundary clean.
+    """
+
+    def __init__(
+        self,
+        *,
+        endpoint: str | None = None,
+        timeout: float = 10.0,
+        language: str = _DEFAULT_LANGUAGE,
+    ) -> None:
+        import httpx  # lazy: keep import side-effect-free at module load
+
+        # Default to the wbsearchentities REST entry derived from the SPARQL
+        # endpoint host, or a sane public default.
+        base = endpoint or _default_api_endpoint()
+        self._language = language
+        self._client = httpx.Client(
+            base_url=base,
+            timeout=timeout,
+            headers={"User-Agent": "dLogos-PoC/0.1 (resolution; +local)"},
+        )
+
+    def search(
+        self, name: str, *, entity_type: EntityType | None = None, limit: int = 5
+    ) -> list[dict[str, Any]]:  # pragma: no cover - requires network
+        params = {
+            "action": _SEARCH_ACTION,
+            "search": name,
+            "language": self._language,
+            "uselang": self._language,
+            "format": "json",
+            "limit": str(limit),
+            "type": "item",
+        }
+        resp = self._client.get("", params=params)
+        resp.raise_for_status()
+        payload = resp.json()
+        return list(payload.get("search", []))
+
+    def close(self) -> None:  # pragma: no cover - requires network
+        self._client.close()
+
+
+def _default_api_endpoint() -> str:
+    """Derive the Wikidata ``api.php`` URL from configured SPARQL host."""
+
+    sparql = settings.wikidata_endpoint or "https://query.wikidata.org/sparql"
+    try:
+        from urllib.parse import urlsplit
+
+        parts = urlsplit(sparql)
+        host = parts.netloc or "query.wikidata.org"
+    except Exception:  # pragma: no cover - defensive
+        host = "query.wikidata.org"
+    # The public action API lives on www.wikidata.org regardless of the SPARQL host.
+    _ = host
+    return "https://www.wikidata.org/w/api.php"
+
+
+def default_client(**kwargs: Any) -> WikidataClient:
+    """Build the real Wikidata client lazily. Tests inject a fake instead."""
+
+    return _HttpxWikidataClient(**kwargs)
+
+
+# --------------------------------------------------------------------------- #
+# Result model + matcher
+# --------------------------------------------------------------------------- #
+class WikidataMatch(BaseModel):
+    """A resolved Wikidata link for one entity surface form."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(description="The queried surface form.")
+    qid: str | None = Field(
+        default=None, description="Wikidata QID (e.g. 'Q312'); None if no match."
+    )
+    label: str | None = Field(default=None, description="Matched Wikidata label.")
+    description: str | None = Field(
+        default=None, description="Matched Wikidata description, when available."
+    )
+
+
+class WikidataLinker:
+    """Conservative name -> QID linker over an injected client.
+
+    Caches by ``(normalized name, type)`` so repeated guests across episodes
+    cost one lookup. Concepts/works are not linked (return ``None``).
+    """
+
+    def __init__(
+        self,
+        client: WikidataClient | None = None,
+        *,
+        linkable_types: Iterable[EntityType] = _LINKABLE_TYPES,
+    ) -> None:
+        # Lazily build a real client only if a lookup is actually attempted and
+        # none was injected — so constructing a linker never opens the network.
+        self._client = client
+        self._linkable = frozenset(linkable_types)
+        self._cache: dict[tuple[str, EntityType], WikidataMatch] = {}
+
+    def _ensure_client(self) -> WikidataClient:
+        if self._client is None:
+            self._client = default_client()
+        return self._client
+
+    @staticmethod
+    def _norm(name: str) -> str:
+        return " ".join(name.strip().split()).casefold()
+
+    def link(self, name: str, entity_type: EntityType) -> WikidataMatch:
+        """Resolve one name to a :class:`WikidataMatch` (qid may be ``None``)."""
+
+        clean = name.strip()
+        if not clean or entity_type not in self._linkable:
+            return WikidataMatch(name=clean, qid=None)
+
+        cache_key = (self._norm(clean), entity_type)
+        if cache_key in self._cache:
+            return self._cache[cache_key]
+
+        candidates = self._ensure_client().search(
+            clean, entity_type=entity_type, limit=5
+        )
+        match = self._pick(clean, candidates)
+        self._cache[cache_key] = match
+        return match
+
+    def link_entity(self, entity: Entity) -> Entity:
+        """Return a copy of ``entity`` whose ``canonical_id`` is set to QID.
+
+        Only fills ``canonical_id`` when it's empty AND a QID is found, so a
+        prior subject-clustering id (§7.4a lever i) is never clobbered. The
+        clustering id and the QID serve different roles; here we only seed an
+        id when nothing has resolved the entity yet.
+        """
+
+        match = self.link(entity.name, entity.type)
+        if match.qid and entity.canonical_id is None:
+            return entity.model_copy(update={"canonical_id": match.qid})
+        return entity.model_copy()
+
+    @staticmethod
+    def _pick(name: str, candidates: Sequence[dict[str, Any]]) -> WikidataMatch:
+        """Choose the best candidate conservatively.
+
+        Take the first candidate — ``wbsearchentities`` already ranks by
+        relevance, so the top hit is the intended sense (e.g. "Apple" ->
+        *Apple Inc.*, not the fruit). We deliberately do NOT prefer an exact
+        case-insensitive *label* match: a lower-relevance homonym whose label
+        happens to equal the query (the fruit "apple") would otherwise hijack
+        the link, which is exactly the wrong-canonical-id failure we want to
+        avoid. Require a usable QID; return ``None`` qid if the list is empty
+        or malformed.
+        """
+
+        if not candidates:
+            return WikidataMatch(name=name, qid=None)
+
+        chosen = candidates[0]
+        qid = chosen.get("id")
+        if not isinstance(qid, str) or not qid:
+            return WikidataMatch(name=name, qid=None)
+        return WikidataMatch(
+            name=name,
+            qid=qid,
+            label=(str(chosen["label"]) if chosen.get("label") else None),
+            description=(
+                str(chosen["description"]) if chosen.get("description") else None
+            ),
+        )
+
+
+def link_entities(
+    entities: Sequence[Entity],
+    client: WikidataClient | None = None,
+) -> list[WikidataMatch]:
+    """Batch-link a set of entities, deduplicating by (name, type).
+
+    Convenience wrapper for callers that want the match table rather than
+    rewritten entities. Deterministic: results follow input order.
+    """
+
+    linker = WikidataLinker(client)
+    return [linker.link(ent.name, ent.type) for ent in entities]
