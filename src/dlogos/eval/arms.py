@@ -7,8 +7,11 @@ Each arm answers a :class:`~dlogos.eval.golden.GoldenQuery` and returns an
 2. :class:`ModelWebSearchArm` -- model + live web search. The Perplexity bar:
    neutralizes naive recency/provenance so dLogos must win on *structure*.
 3. :class:`ModelNaiveRagArm` -- model over a dumb top-k vector index built from
-   the SAME ~200-pod transcripts. Isolates whether the graph/temporal/stance
-   structure beats dumb retrieval on identical data.
+   the SAME ~200-pod transcripts, but **independently** of the graph (see
+   :mod:`dlogos.retrieval.naive_rag`: raw-chunk cosine top-k, no graph, no
+   temporal model, no stance). Isolates whether the graph/temporal/stance
+   structure beats dumb retrieval on identical source data -- and lets dLogos
+   genuinely *lose* if the structure did not help.
 4. :class:`ModelDLogosArm` -- model + the dLogos temporal graph (via the MCP /
    retriever surface).
 
@@ -84,7 +87,13 @@ class ChatClient(Protocol):
 
 @runtime_checkable
 class WebSearchTool(Protocol):
-    """A live web-search tool returning ranked text snippets for a query."""
+    """A live web-search tool returning ranked text snippets for a query.
+
+    Injected into :class:`ModelWebSearchArm` so the arm never reaches the
+    network itself. Tests pass :class:`FakeWebSearchTool` (deterministic, no
+    I/O); production passes :class:`LazyWebSearchAdapter` (which imports its real
+    backend lazily). The arm depends only on this structural surface.
+    """
 
     async def search(self, query: str) -> list[str]: ...
 
@@ -180,8 +189,82 @@ class ModelWebSearchArm:
         return Answer(arm=self.name, text=text, citations=[])
 
 
+class FakeWebSearchTool:
+    """A deterministic, offline :class:`WebSearchTool` for tests / dry runs.
+
+    Returns a fixed set of snippets per query with no network and no randomness,
+    so the web-search arm is exercisable in unit tests. Either hand it a
+    canned ``results`` map (query substring -> snippets) or rely on the
+    templated default. It records the queries it saw for assertions.
+    """
+
+    def __init__(self, results: dict[str, list[str]] | None = None) -> None:
+        self._results = dict(results or {})
+        self.queries: list[str] = []
+
+    async def search(self, query: str) -> list[str]:
+        self.queries.append(query)
+        # Exact match first, then substring, then a deterministic template.
+        if query in self._results:
+            return list(self._results[query])
+        for key, snippets in self._results.items():
+            if key and key in query:
+                return list(snippets)
+        return [
+            f"Web result 1 for: {query}",
+            f"Web result 2 for: {query}",
+        ]
+
+
+class LazyWebSearchAdapter:
+    """A real :class:`WebSearchTool` whose backend is imported lazily.
+
+    Keeps any heavy/optional web-search SDK out of the import graph: the backend
+    factory runs only on the first ``search`` call. Inject this in production;
+    inject :class:`FakeWebSearchTool` in tests. The default factory raises with a
+    clear message so an un-configured real run fails loudly rather than silently
+    hitting the network — a deployment wires a concrete ``backend_factory`` (e.g.
+    a Tavily/Brave/Perplexity client) that exposes ``search(query) -> snippets``.
+
+    This is a stub adapter on purpose: the PoC's credible runs use the dLogos and
+    naive-RAG arms over fixed data; the live web arm is the optional Perplexity
+    bar and is not exercised in deterministic tests.
+    """
+
+    def __init__(self, backend_factory=None, *, max_results: int = 5) -> None:
+        self._backend_factory = backend_factory
+        self._max_results = max_results
+        self._backend = None
+
+    def _ensure_backend(self):
+        if self._backend is None:
+            if self._backend_factory is None:
+                raise RuntimeError(
+                    "LazyWebSearchAdapter has no backend_factory; inject a real "
+                    "web-search client (or use FakeWebSearchTool in tests)."
+                )
+            # Lazy: the factory may import a heavy SDK; only happens here.
+            self._backend = self._backend_factory()
+        return self._backend
+
+    async def search(self, query: str) -> list[str]:
+        backend = self._ensure_backend()
+        result = backend.search(query)
+        if hasattr(result, "__await__"):
+            result = await result
+        snippets = [str(s) for s in result]
+        return snippets[: self._max_results]
+
+
 class ModelNaiveRagArm:
     """Arm 3: model + dumb top-k vector RAG over the SAME transcripts.
+
+    The injected ``retriever`` is the deliberate weak baseline. The credible
+    wiring is :class:`dlogos.retrieval.naive_rag.TranscriptRagRetriever` — an
+    INDEPENDENT cosine top-k index over *raw transcript chunks* with no graph, no
+    temporal model and no stance, so this arm shares only the source data with
+    the dLogos arm, never its structure. (The protocol is structural, so any
+    :class:`VectorRetriever` works in tests.)
 
     Carries the retrieved spans as citations so the speaker-verified check can
     bite -- naive retrieval may surface a topically-relevant span where the
@@ -270,14 +353,20 @@ def _citation_from_hit(hit: object) -> Citation | None:
 
 
 class GraphVectorRetriever:
-    """Arm-3 adapter: *dumb* top-k retrieval over the SAME graph claims.
+    """Graph-coupled top-k adapter — retained for the MCP surface, NOT arm 3.
 
-    Wraps a retrieval surface but uses ONLY its plain ``search`` (semantic +
-    lexical fusion over the flattened claims) — deliberately no consensus, no
-    temporal bucketing, no stance synthesis. This is the structure-free control
-    (spec §9 arm 3): it returns the top-k spans as citations so the
-    speaker-verified check can still bite on a topically-relevant-but-
-    misattributed span.
+    Wraps a retrieval surface and uses ONLY its plain ``search`` (semantic +
+    lexical fusion over the flattened graph claims) — no consensus, no temporal
+    bucketing, no stance synthesis.
+
+    NOTE (eval credibility, spec §9): this still rides the *graph's* index, so it
+    is NOT an honest control for "graph structure beats dumb retrieval on
+    identical data" — it reuses the very structure under test. The credible arm-3
+    retriever is :class:`dlogos.retrieval.naive_rag.TranscriptRagRetriever`, an
+    INDEPENDENT cosine index over raw transcript chunks. This adapter is kept
+    only as a graph-side convenience (e.g. inspecting what the bare graph index
+    returns); :class:`ModelNaiveRagArm` should be wired to the independent
+    retriever instead.
     """
 
     def __init__(self, surface: _SearchSurface, *, k: int = 8) -> None:
