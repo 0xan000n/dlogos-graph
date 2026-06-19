@@ -32,20 +32,30 @@ class Settings(BaseSettings):
     podcast_index_secret: str = Field(default="", alias="PODCAST_INDEX_SECRET")
 
     # --- Open-weight extraction endpoint (OpenAI-compatible) ---
+    # The smoke run points these at a hosted OpenAI-compatible endpoint
+    # (DeepInfra): EXTRACTION_BASE_URL=https://api.deepinfra.com/v1/openai,
+    # EXTRACTION_MODEL=deepseek-ai/DeepSeek-V3. The localhost default keeps a
+    # fresh checkout / the offline tests self-contained (tests inject fakes and
+    # never read these).
     extraction_base_url: str = Field(
         default="http://localhost:8000/v1", alias="EXTRACTION_BASE_URL"
     )
     extraction_api_key: str = Field(
         default="sk-no-key-required", alias="EXTRACTION_API_KEY"
     )
-    extraction_model: str = Field(default="deepseek-v3", alias="EXTRACTION_MODEL")
+    extraction_model: str = Field(
+        default="deepseek-ai/DeepSeek-V3", alias="EXTRACTION_MODEL"
+    )
 
     # --- Open embedding endpoint (OpenAI-compatible; e.g. BGE-M3) ---
+    # Smoke run: EMBED_BASE_URL=https://api.deepinfra.com/v1/openai,
+    # EMBED_MODEL=BAAI/bge-m3, served behind the same OpenAI ``/embeddings``
+    # wire protocol the hosted embedder (resolution/hosted_embedder.py) speaks.
     embed_base_url: str = Field(
         default="http://localhost:8001/v1", alias="EMBED_BASE_URL"
     )
     embed_api_key: str = Field(default="sk-no-key-required", alias="EMBED_API_KEY")
-    embed_model: str = Field(default="bge-m3", alias="EMBED_MODEL")
+    embed_model: str = Field(default="BAAI/bge-m3", alias="EMBED_MODEL")
 
     # --- Neo4j / Graphiti graph backend ---
     neo4j_uri: str = Field(default="bolt://localhost:7687", alias="NEO4J_URI")
