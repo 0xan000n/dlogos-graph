@@ -79,6 +79,9 @@ class Settings(BaseSettings):
     # --- ASR: HuggingFace token for the gated pyannote diarization pipeline ---
     hf_token: str = Field(default="", alias="HF_TOKEN")
 
+    # --- ASR: hosted AssemblyAI (diarization + word timestamps, no GPU) ---
+    assemblyai_api_key: str = Field(default="", alias="ASSEMBLYAI_API_KEY")
+
 
 # Module-level singleton — import this, don't construct Settings ad hoc.
 settings = Settings()
