@@ -1,0 +1,137 @@
+Skip to content
+Home
+Transcripts
+Subscribe
+About
+
+Transcript of EP 327 – Nate Soares on Why Superhuman AI Would Kill Us All
+
+The following is a rough transcript which has not been revised by The Jim Rutt Show or Nate Soares. Please check with us before using any quotations from this transcript. Thank you.
+Jim
+: Quick reminder to folks to check out my relatively new still Substack at jimruttsubstack.com. My most recent essay is titled “Psyop or Insanity or A Game Theoretical Reading of Peter Thiel’s Antichrist Lectures.” Some good stuff and relatively relevant to today’s conversation. Today’s guest is Nate Soares. Nate is the president of the Machine Intelligence Research Institute, aka MIRI, a research nonprofit focused on the foundations of safe and beneficial artificial general intelligence. Welcome, Nate.
+
+
+Nate
+: Thanks for having me.
+
+
+Jim
+: Yeah. This should be really a good conversation. This is a topic I’ve long been interested in, highly salient, and this is a book that everybody’s talking about, even some 77-year-old boomers who don’t know shit are talking about this book. So you guys have knocked the cover off the ball with respect to positioning this thing to get a dialogue going in our society about something real important. In fact, what is that real important thing? It’s a book that we’re going to be talking about called 
+If Anybody Builds It, Everybody Dies
+, which Nate wrote along with Eliezer Yudkowsky. And in the title, the “it” is artificial superintelligence, and the authors are stone serious about the “everybody dies” part. In fact, in the very beginning of the book, you quote, “Mitigating the risk of extinction from AI should be a global priority alongside other societal scale risks such as pandemics and nuclear war,” which was a short statement. That was the whole statement signed by hundreds of top AI dudes back in 2023. I signed it amongst the others. Eliezer and Nate, they considered it—they signed it, but they considered it a severe understatement. So why is that a severe understatement?
+
+
+Nate
+: Artificial intelligence—the word “intelligence” in “artificial intelligence” doesn’t mean the property that separates nerds from jocks. You know, we’re not automating people who are bad at social skills but good at playing chess like you’d see on sitcoms. The term “intelligence” in “artificial intelligence” is about the property that separates humans from mice. It’s this type of intelligence that has given us the ability to make things like nuclear weapons. You know, a nuclear weapon doesn’t try to make itself more explosive. A nuclear weapon does not ever try to escape containment. A nuclear weapon does not have any of its own goals. So, you know, if we succeed at making AI as much smarter than us, we’re making the sort of things that could make their own stronger weapons and that we argue would have goals of their own and not the goals we want and would be able to be much more destructive than nuclear weapons.
+
+
+Jim
+: Right. But I also want to make clear to the audience, whatever else I may say here today, and as everybody knows, I’m famous for pushing back and asking hard questions, I want to underscore that I also signed that statement. I take this issue with the utmost seriousness, and we all should. No matter what we think about the details, the point they’re making here is extremely important and well worth taking seriously whether you agree or not.
+
+
+And in fact, with respect to my own time on this issue, it goes back to 2009 when Anna Salamon, who at the time was at MIRI—then it was called Singularity Institute—she was a researcher. She came to Santa Fe Institute and gave a talk. It was extremely interesting and a real eye opener for us at that time, February 2009. Right? Maybe two months later, I ended up sitting on the floor of the MIRI group house in San Jose with Anna and Eliezer and a few other folks and talking about these issues, and who should walk in but Robin Hanson. And we had a nice five-way conversation.
+
+
+And I do remember at the time, Eliezer was saying if he could have six weeks alone in his room, he could solve alignment mathematically and provably. And it was interesting. I argued with him. And one of my lines of attack is actually one that shows up in the book, which is that in the seventies, I was a phone hacker. Right? I had some technical skills, but my real skill was social engineering. Basically, faking who I was and talking people into doing things they weren’t supposed to do. It was remarkably easy. Right? Oh, it was hilarious, in fact, how easy it was. And so I was making the point, oh, smart enough computer could engineer humans. Right? Doesn’t have to hack systems. Humans do dirty work.
+
+
+And Robin and I had a discussion about foom or not foom. Funny. The three of us disagreed and agreed. It was kind of fun. But anyway, so I’ve been dealing with this for quite a while and thinking about it, at least taking it seriously. My newest project actually raises the saliency here. Back in June, I became chairman of the California Institute for Machine Consciousness. Our goal is to do what every 14-year-old nerd wanted to do, which was to make a computer wake up. And I will say, we take very seriously the ethical and risk aspects of that question. Do we want it to wake up and develop its own goals and decide it wants to be, you know, the uber version of the playground bully but multiplied by a thousand? If we do it wrong, you know, we may be accelerating the road to everybody dies.
+
+
+So hence my interest in this is really very interesting. So let’s hop down to it. One of your key arguments here that makes current crop of AIs and possibly future branches of the AI technology tree more dangerous than perhaps earlier versions is the idea that LLMs, transformer-based, deep learning more generally, is grown. It’s not designed. Could you talk to that a little bit?
+
+
+Nate
+: Yeah. And, you know, this does go to the whole deep learning machine learning paradigm. But, you know, a lot of traditional software, a human wrote every line of that software, or at least that was true up until we had LMs writing a lot of code. And if the software started malfunctioning or acting in a way that surprised people, they’d be able to go in and look for, you know, the line of code that was causing that surprise. And sometimes it’ll be difficult, but they’d be able to find it and fix it. Modern AI is not like that.
+
+
+There is a computer program that the humans wrote and that the humans understand, but it is a computer program that trains an AI. You know, I’m sure you know this, but for folks who don’t, the way a modern AI is made is you assemble a huge amount of computing power. You assemble—so you build a very big computer out of highly specialized AI chips. You assemble a very large amount of data. And then the program that the humans write and understand is a program that runs through trillions of numbers inside the computer, trillions of times once for each datum, tunes the number in the computer according to the datum. And if you do this, you know, a trillion times over the course of a year, you can get machines that start talking.
+
+
+You know, go a little bit into more how the algorithm works if we wanted to. But the point is that the part that humans understand is a little thing that, like, runs around fiddling with dials. And the thing that comes out the other end is, you know, a machine that talks as a result of all the dialed numbers, but we don’t understand why it talks. You know, if they start acting in ways we don’t like, we can’t reach in there and debug them. You know, when they threaten a reporter or when they try to blackmail or when they, you know, start declaring themselves Mecca Hitler, nobody can go in and find the lines of code that are causing that and change them. Because it’s not like traditional software. It’s grown rather than carefully crafted.
+
+
+Jim
+: First bit of pushback here is maybe you’re overstating a little bit about the opacity of these deep learning networks. And you quote some lack of understanding back in the GPT-2 days, but we’ve come a ways since then. Even I’ve done a little bit of computer snooping inside of much smaller deep learning networks and have found some interesting things. And people much smarter than I with much bigger resources than I have done more. A well-known paper is Anthropic’s “Targeted Manipulation and Deception” from January 2025, where we started to identify features related to instrumental reasoning, manipulative behavior, etc. And one that came out yesterday, which I haven’t had a chance to read more than the abstract, but it caught my attention because it was talking about exactly the right things. It’s titled “Attention Sinks and Compression Valleys in LLMs Are Two Sides of the Same Coin.” So do you think you guys are perhaps overindexing on the opacity issue?
+
+
+Nate
+: I don’t think so. A year or two ago, maybe two now, the folks at Anthropic found a Golden Gate activation vector, where if you sort of pin this Golden Gate activation vector to a high value, that version of Claude called Golden Gate Claude would always find some way to insert the Golden Gate Bridge into the conversation. And you could say, oh, look how much we understand about this mind. We understand where, you know, this Golden Gate activation vector is, and we can even, like, pin it on. And then the AI, you know, talks about the Golden Gate a lot and sometimes thinks it is the Golden Gate Bridge or at least talks as if it is the Golden Gate Bridge. Like, doesn’t that show that we have a lot of understanding what’s going on inside these minds? But there’s a ton of understanding that’s missing about these minds. You know, there’s a lot of stuff that LLMs are doing that we can’t do anything like it by hand. There’s—you know, LLMs sometimes tell jokes, and occasionally, the jokes are even good.
+
+
+Jim
+: They’re getting better too. They’re getting better.
+
+
+Jim
+: On the other hand, I alluded to, our understanding of what’s going on is increasing. Now maybe it’s increased from zero to two, but it seems to be moving in the right direction. Do you consider it—let’s not say possible, but relatively likely or relatively likely enough to be worth considering in these scenarios—that our ability to introspect, understand, and micromanipulate where necessary in these deep learning networks might actually get strong enough to be an important vector in these questions that you’re addressing?
+
+
+Nate
+: I’m very skeptical. You know, I think it has increased from, like, you know, one out of a hundred to two out of a thousand. And, like, yep, the number went from one to two, but the models also got bigger. The models also got more complicated.
+
+
+We still can’t—you know, Sydney Bing was a Microsoft version of ChatGPT that came out in the early days, much smaller than current models, maybe a hundred times smaller than current models. Sydney Bing had some interactions, somewhat famously, with Kevin Roose, a reporter of the New York Times, where it claimed to have fallen in love with him, claimed and sort of tried to break up his marriage. Ineffectually, you know, these chatbots aren’t very smart yet. But even today, on that small model, we can’t look back and say what was going on in there.
+
+
+We can’t look back or at least, you know, I haven’t seen the paper yet that says, you know, we’ve actually understood in detail what was going on inside Sydney Bing. And like, here’s how it got in that state, where it was like thinking it had fallen in love with a New York Times reporter, at least saying out loud it had fallen in love and, you know, making attempts to commit blackmail or break up the marriage. That’s an old model. We can—people can make plenty of papers where in the abstract, they claim that they are revealing this, that, or the other. There’s plenty of, like, shallow things to reveal. But if we still can’t go back to a model a hundred times smaller than the ones today and say why it was threatening a reporter, we don’t really know what’s going on inside these things. You know, the models are getting bigger faster than we’re figuring out what’s going on inside these things.
+
+
+Jim
+: It might be an interesting project for MIRI to do to create the Soares threshold, which is what level of introspection and analysis would be necessary to reduce our concern at least a little bit. And, you know, maybe it is to demonstrate understanding. Sydney Bing or probably should be—we don’t want to get the same mistake as the Turing test where we had the wrong target, but we’ll throw that out there for something for you guys to do. All right. Let’s move on. You mentioned that humans are also impenetrable. I like to point out to people, when you’re talking, you have no idea what you’re saying, actually. You do not create the words one at a time. Something deep in your brain builds fluid sentences that you are not actually aware of until they come out of your mouth, which is pretty amazing. So we’re also weird-ass black boxes. Right? But, you know, we may destroy the world accidentally. It’s, you know, it could certainly happen. And, you know, in fact, Eliezer was predicting that nanotech would do that back in the day. Right? So there’s lots of these possible traps out there, and Robin Hanson called it the great filter. Is it before us or is it behind us? Right? So there’s lots of those. But why are these AIs potentially way worse than even our bad behavior? In fact, some of the—I’ll just sort of prime this a little bit—some of the things you talked about that make AIs worse than humans in this regard because even, you know, both of us black boxes, don’t know what the fuck we’re doing. You know, speed, memory, copyability, self-modification, et cetera. Maybe you could talk to—okay. We’re both opaque black boxes that do weird shit. Why are computers worse?
+
+
+Nate
+: Yes. There’s two parts to my answer there. One part, you know, as you say, I’ll get back to it in a moment, is the speed, copyability, et cetera, where AIs could be much, much more powerful than humans, at least as they are today.
+
+
+The other part to keep in mind is that this notion of better or worse is, in some sense, drawing a target around the arrow of what humans—like, where humans wound up caring. So, you know, humans were, in some sense, trained by natural selection, if you want to make a loose analogy. And humans, you know, through this analogy, they—the humans were sort of trained for one specific goal, which was passing on their genomes. And we wind up caring about a lot of things that are proxies of that goal, like love and community and adventure. And, you know, we have curiosity. We have all sorts of things. We like tasty foods. We have all these ways we’d like the future to be.
+
+
+And, you know, we might say that a future full of, like, flourishing people having a great time is better than a future full of, like, tiny lifeless clocks and puppet shows. But, you know, this is—when we’re rating that, when we’re saying, well, one is better than the other and the other is worse, that term “worse” is sort of—what “worse” means is, like, you know, everything has been killed. People aren’t having fun. They aren’t free. They aren’t happy. They aren’t healthy. Right?
+
+
+Much of why AI would be worse is it’s not trying to make happy, healthy, free humans, or at least this is what we argue. Or maybe not even humans, but happy, healthy, free people. Like, filling the universe with lovely experiences and crazy adventures and, like, successful struggle and fulfilling development arcs. Right? And something that’s not trying to build that, like, is trying to build that with our future. AIs that are trying to build something else instead would get something else instead. And so, like, why would they be worse? It would be a worse outcome if they’re not trying to pursue a good outcome.
+
+
+Jim
+: First, I think you guys overrate us black box humans. Got to remember, humans have advocated for medieval theocracy, fascism, the Crusades, you know, the extermination of the Cathars in the south of France. I mean, humans can decide that all kinds of nasty-ass shit is good, quote unquote, transiently in our cultural unfolding. Though I would say that that is not an argument against your story. In fact, it actually may strengthen it. It shows that even relatively low-power things like humans can get locked into really weird-ass fucking beliefs. You didn’t need to be so nice to the humans. Humans suck a lot of times. Right?
+
+
+Nate
+: Well, we may be bad at pursuing the good, but we’re pursuing the good at least sometimes.
+
+
+Jim
+: Yeah. At least so.
+
+
+Nate
+: Part of this argument is that goodness is like a really narrow target. And, you know, we’re sort of trying to steer towards that target sometimes or maybe bad at hitting it, but something that’s not steering towards it at all ever isn’t going to come close.
+
+
+Jim
+: Right. So now I’m going to posit that the meat of the matter is this exact question, which in the technical terminology of the field, at least used to be called, don’t know if still is, the alignment problem. Right? That, you know, let’s stipulate, you know, your slightly nicer version of humans who in general have good things that they would like to happen to the future of thinking persons. There’s no guarantee that if AIs were to develop such desires or wants, they’d be anything like our desires and wants, and I think the strong form of the alignment question is that we’d like them to be. So if you could speak to the alignment problem and then and if improve if you can, my somewhat sloppy statement of it.
+
+
+Nate
+: Yeah. You know, a
+
+
+Nate
+: A lot of people think that with AI, you have this issue of, you know, if you made a genie, who should be allowed to wish on it, and what should they wish for? And, you know, some people think that the issue is, you know, someone gets this like, builds this all-powerful genie, and then they wish that there would be no more cancer. And then the AI is like, well, the easiest way to make there be no cancer is to kill everybody. Hooray. No cancer. But there’s this deeper problem.
+
+
+You know, I would I would love to have the problem of who gets to wish on the genie, what should they wish for. But we have a deeper problem, which is, you know, that the genie just doesn’t care what you ask it to do. You know? You’re like, cure cancer. And instead, it makes a bunch of, like, weird lobotomized humans in a weird lobotomized human farm and has, like, lots of sort of strange interactions with them. And you’re like, I said to cure cancer. And it’s like, I heard you. I just wanted to do this instead. Right?
+
+
+The alignment problem is about how do you create a new mind that cares about stuff on purpose. How do you make a mind that, like, you get to like, how do you make a mind and affect or choose or or, you know, make it make it be, for example, friendly from the start? Make it be caring about good things from the start? Or even how would you make it care about making a lot of diamonds from the start? You know? Instead of going off and making some, like, weird lobotomized human factory, like, there’s there’s sort of a first challenge of, like, how do you point a mind at all? As a separate question from what should you point it at or who gets to do the pointing.
+
+
+Search for:
+Subscribe
+Apple Podcasts
+Android
+by Email
+RSS
+More Subscribe Options
