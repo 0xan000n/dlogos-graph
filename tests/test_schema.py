@@ -41,6 +41,14 @@ def test_valid_extracted_claim() -> None:
     assert claim.source_span.transcript_offset is None
 
 
+def test_entity_carries_optional_wikidata_qid() -> None:
+    # Wikidata-anchored resolution stamps a QID onto the entity; it defaults to
+    # None straight off the extractor.
+    anchored = Entity(name="Apple", type=EntityType.organization, qid="Q312")
+    assert anchored.qid == "Q312"
+    assert Entity(name="Apple", type=EntityType.organization).qid is None
+
+
 @pytest.mark.parametrize("bad_sentiment", [-1.5, 1.5, 2.0, -42.0])
 def test_sentiment_out_of_range_rejected(bad_sentiment: float) -> None:
     with pytest.raises(ValidationError):

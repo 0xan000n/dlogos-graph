@@ -168,6 +168,7 @@ class ClaimLoader:
             name=claim.subject_entity.name,
             type=claim.subject_entity.type,
             aliases=[claim.subject_entity.name],
+            wikidata_qid=claim.subject_entity.qid,
         )
         claim_node = ClaimNode(
             claim_id=claim_id,

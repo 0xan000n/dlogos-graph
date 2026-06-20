@@ -58,6 +58,7 @@ class EntityNode(BaseModel):
     name: str
     type: EntityType
     aliases: list[str] = Field(default_factory=list)
+    wikidata_qid: str | None = None
 
 
 class ClaimNode(BaseModel):

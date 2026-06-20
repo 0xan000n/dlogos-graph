@@ -103,6 +103,11 @@ class Entity(BaseModel):
     canonical_id: str | None = Field(
         default=None, description="Filled by resolution; None until resolved."
     )
+    qid: str | None = Field(
+        default=None,
+        description="Wikidata QID anchor (person/org), filled by resolution; "
+        "None until anchored.",
+    )
 
 
 class SpeakerRef(BaseModel):
