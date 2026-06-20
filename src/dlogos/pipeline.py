@@ -42,6 +42,7 @@ from dlogos.extraction.chunking import (
     chunk_transcript,
 )
 from dlogos.extraction.extractor import ClaimExtractor
+from dlogos.extraction.grounding import ground_claims
 from dlogos.graph.loader import ClaimLoader
 from dlogos.ingestion.fetch import FetchResult
 from dlogos.ingestion.manifest import CorpusManifest, ManifestRow
@@ -188,6 +189,16 @@ class PipelineDeps:
         resolve hosts by voiceprint without the caller hand-assembling per-label
         refs. ``None`` (the default) means the gallery only runs against any
         explicit ``EpisodeInput.voice_sample_refs``.
+    ground_claims:
+        When ``True`` (the default), each episode's extracted claims are
+        regrounded onto the transcript segment their evidence actually came from
+        *after* extraction and *before* speaker-stamping — snapping the
+        LLM-estimated ``source_span`` to the segment's real ``[t_start, t_end]``
+        and correcting the diarization ``label`` to that segment's speaker (spec
+        §7.4). Because the corrected label then drives speaker resolution, the
+        canonical speaker id derives from the grounded label, not the model's
+        guess. Set ``False`` to keep the raw extractor spans/labels (e.g. to
+        A/B the defect the grounding pass fixes).
     """
 
     asr: ASRBackend
@@ -200,6 +211,7 @@ class PipelineDeps:
         Callable[[str, str], tuple[str, str | None] | None] | None
     ) = None
     voice_sample_ref_for: Callable[[str, str], str | None] | None = None
+    ground_claims: bool = True
 
 
 # --------------------------------------------------------------------------- #
@@ -358,6 +370,17 @@ class Pipeline:
 
             # 6) extract stance-tagged claims (speaker refs carry only labels).
             ep_claims = await self._deps.extractor.extract_many(chunks)
+
+            # 6b) ground each claim to the transcript segment its evidence came
+            # from (spec §7.4): the extractor's source_span is LLM-estimated on a
+            # coarse grid and its label can disagree with the diarization at the
+            # cited time. Regrounding snaps the span to the segment's REAL
+            # [t_start, t_end] and corrects the diarization label — and it runs
+            # BEFORE speaker-stamping so the corrected label is what speaker
+            # resolution reads, i.e. the canonical id derives from the grounded
+            # label, not the model's guess. On-by-default; flag-guarded for A/B.
+            if self._deps.ground_claims:
+                ep_claims = ground_claims(ep_claims, transcript)
 
             # 7) stamp the resolved speaker id/name onto each claim.
             for claim in ep_claims:

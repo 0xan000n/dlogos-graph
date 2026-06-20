@@ -32,6 +32,9 @@ env/
 data/
 *.audio
 
+# Smoke / viewer output (exported graph JSON, etc.)
+out/
+
 # OS / editor
 .DS_Store
 .idea/
