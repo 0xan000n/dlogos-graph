@@ -62,6 +62,52 @@ from dlogos.speakers.identity import (
     SpeakerResolution,
     VoiceEmbedder,
 )
+from dlogos.speakers.speaker_store import extract_label_names
+
+
+# --------------------------------------------------------------------------- #
+# Persistent-resolver seams (Phase 3)
+# --------------------------------------------------------------------------- #
+@runtime_checkable
+class SubjectResolverLike(Protocol):
+    """The slice of a subject resolver the orchestrator drives (spec Phase 3).
+
+    Declared structurally so the default batch
+    :func:`~dlogos.resolution.subjects.resolve_subjects` path and the persistent
+    :class:`~dlogos.resolution.incremental.IncrementalResolver` are
+    interchangeable: anything exposing ``resolve(claims) -> SubjectResolution``
+    can be injected as :attr:`PipelineDeps.subject_resolver` to replace the
+    in-batch clustering with cross-episode resolution against a persistent store.
+    The real :class:`IncrementalResolver` (whose ``resolve`` has exactly this
+    shape) satisfies it unchanged.
+    """
+
+    def resolve(
+        self, claims: list[ExtractedClaim]
+    ) -> SubjectResolution:  # pragma: no cover - protocol
+        ...
+
+
+@runtime_checkable
+class SpeakerResolverLike(Protocol):
+    """The slice of a name-driven speaker resolver the orchestrator drives.
+
+    Declared structurally so the
+    :class:`~dlogos.speakers.speaker_store.NameSpeakerResolver` can be injected
+    as :attr:`PipelineDeps.speaker_resolver` to fill diarization labels from
+    spoken/manifest names against a persistent speaker store *before* the
+    existing host-gallery/guest/fallback chain. The real ``NameSpeakerResolver``
+    (whose ``resolve`` has exactly this shape) satisfies it unchanged.
+    """
+
+    def resolve(
+        self,
+        transcript: Transcript,
+        label_names: dict[str, str],
+        *,
+        qids: dict[str, str] | None = None,
+    ) -> dict[str, SpeakerResolution]:  # pragma: no cover - protocol
+        ...
 
 
 # --------------------------------------------------------------------------- #
@@ -209,6 +255,27 @@ class PipelineDeps:
         when the transcript carries no words (the mock/WhisperX paths), so it is
         safe to leave on. ``False`` (the default) keeps the backend's utterance
         segments, preserving today's behavior.
+    subject_resolver:
+        Optional persistent, cross-episode subject resolver (a
+        :class:`SubjectResolverLike`, i.e. the
+        :class:`~dlogos.resolution.incremental.IncrementalResolver`). When
+        present, step 8 calls ``subject_resolver.resolve(all_claims)`` instead of
+        the in-batch :func:`~dlogos.resolution.subjects.resolve_subjects`, so the
+        same real-world entity resolves to one ``canonical_id`` *across* episodes
+        (and across separate runs, against the resolver's persistent store).
+        ``None`` (the default) keeps the in-batch clustering — byte-identical to
+        today.
+    speaker_resolver:
+        Optional name-driven, cross-episode speaker resolver (a
+        :class:`SpeakerResolverLike`, i.e. the
+        :class:`~dlogos.speakers.speaker_store.NameSpeakerResolver`). When
+        present, ``_resolve_speakers`` first mines the transcript for
+        ``label->name`` (self-intros + host guest-intros via
+        :func:`~dlogos.speakers.speaker_store.extract_label_names`) and lets the
+        resolver fill those labels with stable cross-episode ``speaker_id``s
+        *before* the existing host-gallery/guest/fallback chain — name-resolved
+        labels win, everything else falls through unchanged. ``None`` (the
+        default) skips it entirely, preserving today's behavior.
     """
 
     asr: ASRBackend
@@ -223,6 +290,8 @@ class PipelineDeps:
     voice_sample_ref_for: Callable[[str, str], str | None] | None = None
     ground_claims: bool = True
     resegment_words: bool = False
+    subject_resolver: SubjectResolverLike | None = None
+    speaker_resolver: SpeakerResolverLike | None = None
 
 
 # --------------------------------------------------------------------------- #
@@ -417,9 +486,18 @@ class Pipeline:
             all_claims.extend(ep_claims)
 
         # 8) subject-entity resolution over the WHOLE batch -> canonical_id.
-        subject_resolution = resolve_subjects(
-            all_claims, self._deps.embedder, threshold=self._similarity_threshold
-        )
+        # An injected persistent resolver (IncrementalResolver) resolves each
+        # subject against the ACCUMULATED canonical set so the same real-world
+        # entity gets one id across episodes/runs; with no resolver injected we
+        # fall back to the in-batch clustering — byte-identical to today.
+        if self._deps.subject_resolver is not None:
+            subject_resolution = self._deps.subject_resolver.resolve(all_claims)
+        else:
+            subject_resolution = resolve_subjects(
+                all_claims,
+                self._deps.embedder,
+                threshold=self._similarity_threshold,
+            )
         resolved_claims = subject_resolution.claims
 
         # Reflect the canonical_id stamping back onto the per-episode runs so the
@@ -484,6 +562,10 @@ class Pipeline:
             guest_resolver=deps.guest_resolver,
             fallback_speaker_id=deps.fallback_speaker_id,
             voice_sample_ref_for=deps.voice_sample_ref_for,
+            ground_claims=deps.ground_claims,
+            resegment_words=deps.resegment_words,
+            subject_resolver=deps.subject_resolver,
+            speaker_resolver=deps.speaker_resolver,
         )
         return cls(seeded, ingestion=ingestion, **kwargs)
 
@@ -709,21 +791,35 @@ class Pipeline:
         ep_input: EpisodeInput,
         guest_resolutions: dict[str, GuestResolution],
     ) -> dict[str, SpeakerResolution]:
-        """Resolve each per-episode label via host gallery, then recurring guest.
+        """Resolve each per-episode label by name, then host gallery, then guest.
 
-        Host voiceprint resolution runs first (when a gallery is injected); any
-        label still unresolved that matches the episode's recurring guest is
-        filled from the batch-level guest resolution. Labels with neither stay
-        per-episode (an unresolved :class:`SpeakerResolution`).
+        When a name-driven ``speaker_resolver`` is injected it runs *first*:
+        spoken/manifest names give the host and recurring guests stable
+        cross-episode ``speaker_id``s, and those name-resolved labels **win** over
+        everything downstream. Host voiceprint resolution runs next (when a
+        gallery is injected); any label still unresolved that matches the
+        episode's recurring guest is filled from the batch-level guest
+        resolution. Labels with none of these stay per-episode (an unresolved
+        :class:`SpeakerResolution`, or the per-episode fallback id).
         """
 
         labels = list(dict.fromkeys(seg.speaker for seg in transcript.segments))
         resolution: dict[str, SpeakerResolution] = {}
 
+        # Name-driven cross-episode resolution wins (runs before the gallery so a
+        # spoken/manifest name anchors the canonical speaker id even when a
+        # voiceprint is unavailable). Only its *resolved* labels are kept; its
+        # unresolved labels fall through to the gallery/guest/fallback chain.
+        name_resolution = self._resolve_speakers_by_name(transcript)
+
         gallery = self._deps.host_gallery
         voice_sample_refs = self._voice_sample_refs(ep_input, labels)
         if gallery is not None and voice_sample_refs:
             resolution = gallery.resolve_transcript(transcript, voice_sample_refs)
+
+        for label, res in name_resolution.items():
+            if res.is_resolved:
+                resolution[label] = res
 
         guest = guest_resolutions.get(ep_input.episode.episode_id)
         guest_per_ep = (
@@ -755,6 +851,29 @@ class Pipeline:
                     label=label, resolved=None, score=0.0
                 )
         return resolution
+
+    def _resolve_speakers_by_name(
+        self, transcript: Transcript
+    ) -> dict[str, SpeakerResolution]:
+        """Name-driven cross-episode label resolution (Phase 3, opt-in).
+
+        Returns an empty map when no ``speaker_resolver`` is injected — so the
+        default speaker path is byte-identical to today. When one is present, it
+        mines the transcript for ``label->name`` (self-intros + host guest-intros
+        via :func:`~dlogos.speakers.speaker_store.extract_label_names`) and lets
+        the injected resolver canonicalize each named label to a stable
+        cross-episode ``speaker_id`` against its persistent store. Labels with no
+        detected name come back unresolved (and fall through to the
+        gallery/guest/fallback chain).
+        """
+
+        resolver = self._deps.speaker_resolver
+        if resolver is None:
+            return {}
+        label_names = extract_label_names(transcript, known_hosts=[])
+        if not label_names:
+            return {}
+        return resolver.resolve(transcript, label_names)
 
     @staticmethod
     def _fallback_resolution(
