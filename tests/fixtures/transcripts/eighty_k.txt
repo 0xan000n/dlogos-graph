@@ -1,0 +1,61 @@
+Cold open [00:00:00]
+Ryan Greenblatt:
+ The most plausible story of all is the “humans give the AIs everything they need” story. The AIs just chill. They make sure they have control of the situation. Maybe they’re manipulating what’s going on. They’re sabotaging the alignment experiments, they’re sabotaging the alignment results. They’re deluding us.
+But they don’t do anything very aggressive, you know, they’re just chilling, they do lots of good stuff, you know, there’s cures to all diseases or like all kinds of great stuff is happening, industrial development. People are like, “It’s so great that AI did go well and we didn’t have misalignment.” Like it could be potentially that humans are deluded indefinitely, right? It might be just like you can in principle Potemkin village the entire way through.
+And then another story I would call “sudden robot coup” — which also doesn’t require very superhuman capabilities — which is like we build vast autonomous robot armies and we’re like, “Hooray! We’re building a vast robot army to compete with China,” and China’s like, “Hooray! We’re building a vast robot army to compete with the US. Truly it’s great that we have such a big robot army.” And then it’s like, oh whoops, all of a sudden the robot armies sweep in and do a relatively hard power takeover.
+I think a mistake that the safety community appears to have made is too much focus on overly optimistic worlds. Actually focusing on desperate, crazy, YOLO’d pessimistic worlds is pretty reasonable, because that’s where a lot of the risk lives.
+Who’s Ryan Greenblatt? [00:01:10]
+Rob Wiblin:
+ Today I have the pleasure of speaking with Ryan Greenblatt. Ryan is the chief scientist at 
+Redwood Research
+ and the lead author on the paper “
+Alignment faking in large language models
+” — which has been described as probably the most important empirical result ever on the topic of loss of control of artificial intelligence. Thanks so much for coming on the show, Ryan.
+Ryan Greenblatt:
+ Yeah, it’s great to be here.
+How close are we to automating AI R&D? [00:01:29]
+Rob Wiblin:
+ Let’s start by talking about the best arguments for and against a 
+software-based intelligence explosion
+ in the relatively near future — by which I’m thinking maybe under four years, approximately.
+What do you think is the chance that we’ll be able to largely automate AI R&D, or maybe roughly automate a full AI company as it exists today, within the next four years or so?
+Ryan Greenblatt:
+ I think the probability of that capability existing — not necessarily being used, not necessarily being fully deployed — is about 25%, and then maybe about 50% if we extend it to like eight years.
+Rob Wiblin:
+ I think many people hear that and they would wonder, is this just pure speculation? How can we form realistic or grounded expectations about this kind of thing?
+I’d be interested to know what are the key pieces of evidence that bear on you making a prediction or forecast like that. What is a key piece of evidence that makes you think it is plausible at all?
+Ryan Greenblatt:
+ To start, I think a good place to look is, what is the current level of AI capabilities? How close does it feel? People have obviously wildly different intuitions about how close we are in some objective sense.
+I think currently the situation is: the AIs are getting better and better at math; they’re sort of marching through the human regime in math. 
+They’re able to do roughly about one hour or one and a half hours of sort of isolated software engineering tasks
+ — by that I mean a task that would take a human roughly an hour and a half. And they’re sort of getting better at a variety of different skills.
+So I think we’re at a pretty objectively impressive regime — and importantly, a much more objectively impressive regime than we were at two years ago, and certainly much more impressive than we were at four years ago.
+A naive starting point for where we will be in four years is: where were we four years ago? Where are we now? Trying to qualitatively extrapolate from here to there. This is a bit of a sloppy perspective. Like, I think maybe what I would have said two years ago would have been that we had GPT-3, now we have GPT-4: what’s the gap there? Let’s sloppily extrapolate that forward and get a sense from there.
+I think now we can do better, because we have not just GPT-3; we have GPT-3.5, we have GPT-4, we’ve had the progression since GPT-4 in roughly the two years since then. So over that period, we’ve gone from the AIs just barely being able to do agentic tasks to having some reasonable amount of ability to succeed at that, some ability to recover from mistakes.
+So over this period, GPT-4 could maybe complete some agentic tasks that would take humans like five or 10 minutes; it could sort of understand how to use the tools. I think GPT-3.5 basically couldn’t even understand the tools in agentic scaffolds; GPT-4 could understand these things. And then, over that period we’ve gone from like, “can understand the tools and can maybe do it some of the time” to “can do tasks 50% of the time that takes a human software engineer an hour and a half.”
+There’s sort of a trend line of how fast we’ve been marching through that regime. Over 2024 at least it’s been pretty fast progress, starting from basically nothing at all to an hour and a half, with doubling times of like, I’m stealing a bunch of content from METR, which I think maybe there’ll be a 
+podcast with Beth
+ which covers a bunch of the same content — but we’ve seen doubling times that are fast enough that we’d expect the AIs doing eight-hour tasks or 16-hour tasks in maybe a little less than two years, which is pretty fast progress.
+And then from there, if you’re into the regime where they’re doing weeklong tasks, I think you can maybe get pretty close to automating the job of a research engineer with some schlep on top of that.
+Really, though: how capable are today’s models? [00:05:15]
+Rob Wiblin:
+ OK, so you would say that objectively they’re pretty impressive in what they can do right now. Some people have a more sceptical reaction to that. Is there anything that you could point to to be clearer about what they’re able to do and what they’re not able to do? And maybe answer people who would say, “Sometimes I use these tools and they seem very stupid, or they don’t seem able to do things that I would expect them to be able to do, or they produce a whole lot of reasoning and I find errors in it”?
+Ryan Greenblatt:
+ So I’d say my kind of qualitative, vibesy model is: the AIs are pretty dumb, they used to be much dumber, they’re getting smarter quickly, and they’re very knowledgeable.
+So I think a lot of what people are interfacing with is that we’ve got these systems that have got some smarts to them: they can really figure out some pretty general situations OK, and especially with reasoning models they’re pretty good at thinking through some stuff. In addition to that, they’re very knowledgeable, which means that there’s a misleading impression of how overall general and how adaptable they are that people notice.
+And this is a lot of what people are reacting to. There’s sort of an overoptimistic perspective, which I would say is characterised by this 
+chart
+ Leopold [Aschenbrenner] had where he’s like PhD-level intelligence, or like people are like PhD-level intelligence — and then some people respond to that being like, “PhD level intelligence? Come on, it can’t play tic-tac-toe.” Maybe that’s no longer true with reasoning models, but directionally, you know, it can’t play tic-tac-toe; it can’t respond to relatively novel circumstances. It gets tripped up by this stuff.
+Now, I think we have to discount some of how it’s getting tripped up by this stuff, because I think a bunch of these things might be better described as cognitive biases than lack of smarts. Like there’s a bunch of things that humans systematically get wrong, even though they’re pretty stupid, or in some sense they’re pretty dumb errors.
+Like the 
+conjunction fallacy
+. What if you’re like, “What is the chance that someone is a librarian? What is the chance they’re a librarian, and some property librarians have?” I might be getting this a bit wrong, but [humans will say] it’s more likely on the conjunction of the two, even though that has to be less likely.
+And I think AI systems have biases that are sort of like this, that are shaped by the environment in which they were created or by their training data.
+As an example, if you give AIs a riddle. Like, “There’s a man and a boat and a goat. The boat can carry the man and one other item. How many trips does it take for them to cross the river?” The answer is one trip: they can just cross the river. But there is a similar riddle involving a man, a goat, and something like a cabbage — you know, there’s some tricky approach — and the AIs are so reflexively used to doing this that maybe they immediately blurt out an answer. They sort of have a strong heuristic towards that answer, but it might just be more that they feel a nudging to that. But if you get them to be like, “Oh, it’s a trick question,” then they go from that.
+And in fact, you can get humans on the same sorts of trick questions, right? So if you ask humans, “What’s heavier: a pound of bricks or a pound of feathers?” they’ll say the bricks, and they get tripped. It’s like the language models have the exact opposite problem, where if you ask them, “What’s heavier: two pounds of bricks or a pound of feathers?” then they’re like, “Same weight! Same weight!”
+So I worry that a lot of the tricks people are doing are sort of analogous to tricks you could execute on humans, and it’s hard to know how much to draw from that.
+Rob Wiblin:
+ Yeah. A general challenge here in assessing how capable they are is, I think 
+Nathan Labenz uses this expression
+ that they’re “human-level but not human-like” — so overall, maybe they’re similarly capable as human employees in some situations, but they have very different strengths and weaknesses; they can be tripped up in ways that seem completely baffling to us.
+But I guess you can imagine an AI society that would look at humans and say, “How is it that they can’t multiply in their heads two three-digit numbers? That seems crazy. These are obviously not general intelligences. They have almost no memory of this book that they read last week. That doesn’t make any sense. How could an intelligence act that way?” It makes it a little bit hard to have a common ground on which to compare humans versus AIs.
