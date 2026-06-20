@@ -36,6 +36,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Protocol, runtime_checkable
 
 from dlogos.asr.base import ASRBackend, drop_low_talk_time_speakers
+from dlogos.asr.word_segmentation import resegment_by_words
 from dlogos.extraction.chunking import (
     DEFAULT_MAX_CHARS,
     DEFAULT_OVERLAP_SEGMENTS,
@@ -199,6 +200,15 @@ class PipelineDeps:
         canonical speaker id derives from the grounded label, not the model's
         guess. Set ``False`` to keep the raw extractor spans/labels (e.g. to
         A/B the defect the grounding pass fixes).
+    resegment_words:
+        When ``True``, each transcript's coarse utterance ``segments`` are
+        rebuilt from its word-level stream into tight, sentence-bounded spans
+        (``asr.word_segmentation.resegment_by_words``) right after the talk-time
+        prune and *before* speaker resolution, so the downstream grounding pass
+        snaps claims to ~sentence spans instead of multi-minute blobs. A no-op
+        when the transcript carries no words (the mock/WhisperX paths), so it is
+        safe to leave on. ``False`` (the default) keeps the backend's utterance
+        segments, preserving today's behavior.
     """
 
     asr: ASRBackend
@@ -212,6 +222,7 @@ class PipelineDeps:
     ) = None
     voice_sample_ref_for: Callable[[str, str], str | None] | None = None
     ground_claims: bool = True
+    resegment_words: bool = False
 
 
 # --------------------------------------------------------------------------- #
@@ -355,6 +366,15 @@ class Pipeline:
             transcript = drop_low_talk_time_speakers(
                 transcript, min_fraction=self._min_talk_time_fraction
             )
+
+            # 3b) optional word-level re-segmentation: rebuild coarse utterance
+            # segments into tight, sentence-bounded spans from the word stream so
+            # grounded citations snap to ~sentences rather than multi-minute
+            # blobs (Phase 0). No-op when the transcript carries no words (the
+            # mock/WhisperX utterance-only paths), so it is safe before speaker
+            # resolution. Off by default — opt in via PipelineDeps.
+            if self._deps.resegment_words:
+                transcript = resegment_by_words(transcript)
 
             # 4) cross-episode speaker identity: host gallery + recurring guests.
             label_resolution = self._resolve_speakers(
