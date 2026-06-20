@@ -12,6 +12,7 @@ from dlogos.resolution.wikidata import (
     WikidataClient,
     WikidataLinker,
     WikidataMatch,
+    anchor_entity,
     link_entities,
 )
 from dlogos.schema import Entity, EntityType
@@ -207,6 +208,46 @@ def test_context_without_overlap_falls_back_to_relevance():
     match = linker.link("Jane Doe", EntityType.person, context=["sports"])
     # No description overlaps "sports" → keep the relevance-first hit.
     assert match.qid == "Q999"
+
+
+# --------------------------------------------------------------------------- #
+# anchor_entity: subject-entity QID anchoring for person/org only
+# --------------------------------------------------------------------------- #
+def test_anchor_entity_returns_qid_for_org():
+    linker = WikidataLinker(FakeWikidataClient())
+    qid = anchor_entity(Entity(name="Apple", type=EntityType.organization), linker)
+    assert qid == "Q312"
+
+
+def test_anchor_entity_returns_qid_for_person():
+    linker = WikidataLinker(FakeWikidataClient())
+    qid = anchor_entity(Entity(name="Tyler Cowen", type=EntityType.person), linker)
+    assert qid == "Q7860590"
+
+
+def test_anchor_entity_concept_returns_none_without_client_call():
+    fake = FakeWikidataClient()
+    linker = WikidataLinker(fake)
+    qid = anchor_entity(Entity(name="Apple", type=EntityType.concept), linker)
+    assert qid is None
+    # Concepts are not QID-anchored: never touch the client.
+    assert fake.calls == []
+
+
+def test_anchor_entity_work_returns_none_without_client_call():
+    fake = FakeWikidataClient()
+    linker = WikidataLinker(fake)
+    qid = anchor_entity(Entity(name="Apple", type=EntityType.work), linker)
+    assert qid is None
+    assert fake.calls == []
+
+
+def test_anchor_entity_unknown_name_returns_none():
+    linker = WikidataLinker(FakeWikidataClient())
+    qid = anchor_entity(
+        Entity(name="Nonexistent Person", type=EntityType.person), linker
+    )
+    assert qid is None
 
 
 # --------------------------------------------------------------------------- #

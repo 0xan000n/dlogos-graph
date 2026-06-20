@@ -268,6 +268,24 @@ class WikidataLinker:
         )
 
 
+def anchor_entity(entity: Entity, linker: WikidataLinker) -> str | None:
+    """Resolve a *subject* entity to a Wikidata QID, or ``None``.
+
+    The incremental resolver uses the QID as the strongest cross-episode anchor:
+    two surface forms ("Apple", "the iPhone maker") that map to the same QID are
+    the same canonical node regardless of how far apart they embed. Only
+    person/organization subjects are anchored — concepts/works paraphrase too
+    freely for ``wbsearchentities`` to disambiguate reliably, so we never even
+    consult the client for them (matching :data:`_LINKABLE_TYPES` and the
+    linker's own conservatism). Delegates to the injected
+    :class:`WikidataLinker` (no reimplementation); returns the QID or ``None``.
+    """
+
+    if entity.type not in _LINKABLE_TYPES:
+        return None
+    return linker.link(entity.name, entity.type).qid
+
+
 def link_entities(
     entities: Sequence[Entity],
     client: WikidataClient | None = None,
