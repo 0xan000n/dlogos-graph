@@ -59,7 +59,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from dlogos.schema import Transcript, TranscriptSegment
+from dlogos.schema import Transcript, TranscriptSegment, Word
 
 # AssemblyAI REST surface (see module docstring for field-level details).
 DEFAULT_BASE_URL = "https://api.assemblyai.com"
@@ -280,6 +280,7 @@ class AssemblyAIBackend:
         """Map a completed AssemblyAI result into a schema :class:`Transcript`."""
 
         segments = self._utterances_to_segments(result.get("utterances"))
+        words = self._words_to_words(result.get("words"))
         language = str(result.get("language_code") or self.language_code or "en")
         duration_s = self._resolve_duration(result, segments)
 
@@ -287,6 +288,7 @@ class AssemblyAIBackend:
             episode_id=episode_id,
             language=language,
             segments=segments,
+            words=words,
             duration_s=duration_s,
         )
 
@@ -329,6 +331,39 @@ class AssemblyAIBackend:
 
         segments.sort(key=lambda s: (s.t_start, s.t_end))
         return segments
+
+    @staticmethod
+    def _words_to_words(words: Any) -> list[Word]:
+        """Map AssemblyAI ``words`` to schema :class:`Word`s.
+
+        Each word carries its own diarized ``speaker`` label and a
+        ``start``/``end`` span in **milliseconds → seconds**. Empty-text words
+        are skipped; the diarization label is preserved verbatim (``None`` when
+        absent). Order is preserved (AssemblyAI returns words in time order).
+        """
+
+        if not isinstance(words, list):
+            return []
+
+        out: list[Word] = []
+        for w in words:
+            if not isinstance(w, dict):
+                continue
+            text = str(w.get("text", "")).strip()
+            if not text:
+                continue
+            speaker = w.get("speaker")
+            t_start = _ms_to_s(w.get("start", 0))
+            t_end = max(t_start, _ms_to_s(w.get("end", 0)))
+            out.append(
+                Word(
+                    text=text,
+                    t_start=t_start,
+                    t_end=t_end,
+                    speaker=str(speaker) if speaker is not None else None,
+                )
+            )
+        return out
 
     @staticmethod
     def _resolve_duration(

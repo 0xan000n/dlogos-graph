@@ -66,12 +66,23 @@ _UTTERANCES = [
     {"speaker": "A", "text": "   ", "start": 10000, "end": 10100},
 ]
 
+# Word-level output (AssemblyAI returns these alongside utterances when
+# speaker_labels is on). start/end are in MILLISECONDS; speaker is the diarized
+# label. Word-level re-segmentation (Phase 0) snaps grounded spans to these.
+_WORDS = [
+    {"text": "Welcome", "start": 0, "end": 500, "speaker": "A"},
+    {"text": "back.", "start": 500, "end": 1000, "speaker": "A"},
+    {"text": "I", "start": 4500, "end": 4700, "speaker": "B"},
+    {"text": "think.", "start": 4700, "end": 5200, "speaker": "B"},
+]
+
 _COMPLETED = {
     "id": _TRANSCRIPT_ID,
     "status": "completed",
     "language_code": "en",
     "audio_duration": 10.0,  # seconds (already)
     "utterances": _UTTERANCES,
+    "words": _WORDS,
 }
 
 
@@ -164,6 +175,28 @@ def test_full_local_file_flow_maps_transcript(local_audio: str) -> None:
     assert second.speaker == "B"
     assert "Welcome back" in first.text
     assert "plateaued" in second.text
+
+
+def test_word_level_output_mapped_to_transcript_words(local_audio: str) -> None:
+    """The completed payload's ``words`` map onto ``Transcript.words``.
+
+    Each word carries text, a ms→s converted [t_start, t_end] span, and its
+    diarized speaker label preserved verbatim. These power word-level
+    re-segmentation (tight grounded spans), so they must survive the mapping.
+    """
+
+    rec = _Recorder()
+    backend = _backend(rec.handler(poll_processing_first=False))
+    transcript = backend.transcribe(local_audio)
+
+    assert len(transcript.words) == 4
+    first = transcript.words[0]
+    assert first.text == "Welcome"
+    assert first.t_start == 0.0 and first.t_end == 0.5  # ms → s
+    assert first.speaker == "A"
+    # Speaker label preserved verbatim across the diarization boundary.
+    assert transcript.words[2].speaker == "B"
+    assert transcript.words[2].t_start == 4.5
 
 
 def test_request_sequence_and_auth_header(local_audio: str) -> None:

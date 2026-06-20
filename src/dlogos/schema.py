@@ -140,14 +140,39 @@ class TranscriptSegment(BaseModel):
     t_end: float = Field(ge=0.0)
 
 
+class Word(BaseModel):
+    """A single word-level token with its own diarized speaker + timing.
+
+    AssemblyAI's hosted path emits these alongside the coarse utterance
+    ``segments``. Word-level re-segmentation (``asr.word_segmentation``)
+    rebuilds tight, sentence-bounded ``segments`` from them so grounded
+    citations snap to ~sentence spans rather than multi-minute blobs.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    text: str
+    t_start: float = Field(ge=0.0, description="Word start offset, seconds.")
+    t_end: float = Field(ge=0.0, description="Word end offset, seconds.")
+    speaker: str | None = Field(
+        default=None, description="Per-word diarization label; None when absent."
+    )
+
+
 class Transcript(BaseModel):
-    """A full episode transcript: ordered diarized segments + metadata."""
+    """A full episode transcript: ordered diarized segments + metadata.
+
+    ``words`` is the optional word-level stream (populated by the hosted
+    AssemblyAI path). It is empty for backends that only emit utterance
+    segments, so the word-level re-segmentation pass is a no-op there.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     episode_id: str
     language: str
     segments: list[TranscriptSegment] = Field(default_factory=list)
+    words: list[Word] = Field(default_factory=list)
     duration_s: float = Field(ge=0.0)
 
 
