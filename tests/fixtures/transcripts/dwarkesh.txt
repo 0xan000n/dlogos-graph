@@ -1,0 +1,159 @@
+Andrej Karpathy — AGI is still a decade away
+"The problems are tractable, but they're still difficult”
+Dwarkesh Patel
+Oct 17, 2025
+370
+17
+66
+Share
+Transcript
+The 
+Andrej Karpathy
+ episode.
+Andrej explains why reinforcement learning is terrible (but everything else is much worse), why model collapse prevents LLMs from learning the way humans do, why AGI will just blend into the previous ~2.5 centuries of 2% GDP growth, why self driving took so long to crack, and what he sees as the future of education.
+Watch on 
+YouTube
+; listen on 
+Apple Podcasts
+ or 
+Spotify
+.
+Sponsors
+Labelbox
+ helps you get data that is more detailed, more accurate, and higher signal than you could get by default, no matter your domain or training paradigm. Reach out today at 
+labelbox.com/dwarkesh
+Mercury
+ helps you run your business better. It’s the banking platform we use for the podcast — we love that we can see our accounts, cash flows, AR, and AP all in one place. Apply online in minutes at 
+mercury.com
+Google’s Veo 3.1
+ update is a notable improvement to an already great model. Veo 3.1’s generations are more coherent and the audio is even higher-quality. If you have a Google AI Pro or Ultra plan, you can try it in Gemini today by visiting 
+https://gemini.google
+Timestamps
+(00:00:00) – AGI is still a decade away
+(00:29:45) – LLM cognitive deficits
+(00:40:05) – RL is terrible
+(00:49:38) – How do humans learn?
+(01:06:25) – AGI will blend into 2% GDP growth
+(01:17:36) – ASI
+(01:32:50) – Evolution of intelligence & culture
+(01:42:55) - Why self driving took so long
+(01:56:20) - Future of education
+Transcript
+00:00:00 – AGI is still a decade away
+Dwarkesh Patel 
+00:00:00
+Today I’m speaking with 
+Andrej Karpathy
+. Andrej, why do you say that this will be the decade of 
+agents
+ and not the year of agents?
+Andrej Karpathy 
+00:00:07
+First of all, thank you for having me here. I’m excited to be here.
+The quote you’ve just mentioned, 
+“It’s the decade of agents,”
+ is actually a reaction to a pre-existing quote. I’m not actually sure who said this but they were alluding to this being the year of agents with respect to 
+LLMs
+ and how they were going to evolve. I was triggered by that because there’s some over-prediction going on in the industry. In my mind, this is more accurately described as the decade of agents.
+We have some very early agents that are extremely impressive and that I use daily—Claude and 
+Codex
+ and so on—but I still feel there’s so much work to be done. My reaction is we’ll be working with these things for a decade. They’re going to get better, and it’s going to be wonderful. I was just reacting to the timelines of the implication.
+Dwarkesh Patel 
+00:00:58
+What do you think will take a decade to accomplish? What are the bottlenecks?
+Andrej Karpathy 
+00:01:02
+Actually making it work. When you’re talking about an agent, or what the labs have in mind and maybe what I have in mind as well, you should think of it almost like an employee or an intern that you would hire to work with you. For example, you work with some employees here. When would you prefer to have an agent like Claude or Codex do that work?
+Currently, of course they can’t. What would it take for them to be able to do that? Why don’t you do it today? The reason you don’t do it today is because they just don’t work. They don’t have enough intelligence, they’re not 
+multimodal
+ enough, they can’t do 
+computer use
+ and all this stuff.
+They don’t do a lot of the things you’ve alluded to earlier. They don’t have 
+continual learning
+. You can’t just tell them something and they’ll remember it. They’re cognitively lacking and it’s just not working. It will take about a decade to work through all of those issues.
+Dwarkesh Patel 
+00:01:44
+Interesting. As a professional podcaster and a viewer of AI from afar, it’s easy for me to identify what’s lacking: continual learning is lacking, or multimodality is lacking. But I don’t really have a good way of trying to put a timeline on it. If somebody asks how long continual learning will take, I have no prior about whether this is a project that should take 5 years, 10 years, or 50 years. Why a decade? Why not one year? Why not 50 years?
+Andrej Karpathy 
+00:02:16
+This is where you get into a bit of my own intuition, and doing a bit of an extrapolation with respect to my own experience in the field. I’ve been in AI for almost two decades. It’s going to be 15 years or so, not that long. You had 
+Richard Sutton
+ here, who was around for much longer. I do have about 15 years of experience of people making predictions, of seeing how they turned out. Also I was in the industry for a while, I was in research, and I’ve worked in the industry for a while. I have a general intuition that I have left from that.
+I feel like the problems are tractable, they’re surmountable, but they’re still difficult. If I just average it out, it just feels like a decade to me.
+Dwarkesh Patel 
+00:02:57
+This is quite interesting. I want to hear not only the history, but what people in the room felt was about to happen at various different breakthrough moments. What were the ways in which their feelings were either overly pessimistic or overly optimistic? Should we just go through each of them one by one?
+Andrej Karpathy 
+00:03:16
+That’s a giant question because you’re talking about 15 years of stuff that happened. AI is so wonderful because there have been a number of seismic shifts where the entire field has suddenly looked a different way. I’ve maybe lived through two or three of those. I still think there will continue to be some because they come with almost surprising regularity.
+When my career began, when I started to work on 
+deep learning
+, when I became interested in deep learning, this was by chance of being right next to 
+Geoff Hinton
+ at the University of Toronto. Geoff Hinton, of course, is the godfather figure of AI. He was training all these 
+neural networks
+. I thought it was incredible and interesting. This was not the main thing that everyone in AI was doing by far. This was a niche little subject on the side. That’s maybe the first dramatic seismic shift that came with the AlexNet and so on.
+AlexNet reoriented everyone, and everyone started to train neural networks, but it was still very per-task, per specific task. Maybe I have an image classifier or I have a neural machine translator or something like that. People became very slowly interested in agents. People started to think, “Okay, maybe we have a check mark next to the visual cortex or something like that, but what about the other parts of the brain, and how can we get a full agent or a full entity that can interact in the world?”
+The 
+Atari deep reinforcement learning shift in 2013
+ or so was part of that early effort of agents, in my mind, because it was an attempt to try to get agents that not just perceive the world, but also take actions and interact and get rewards from environments. At the time, this was Atari games.
+I feel that was a misstep. It was a misstep that even the early 
+OpenAI
+ that I was a part of adopted because at that time, the zeitgeist was 
+reinforcement learning
+ environments, games, game playing, beat games, get lots of different types of games, and OpenAI was doing a lot of that. That was another prominent part of AI where maybe for two or three or four years, everyone was doing reinforcement learning on games. That was all a bit of a misstep.
+What I was trying to do at OpenAI is I was always a bit suspicious of games as being this thing that would lead to 
+AGI
+. Because in my mind, you want something like an accountant or something that’s interacting with the real world. I just didn’t see how games add up to it. My project at OpenAI, for example, was within the scope of the 
+Universe project
+, on an agent that was using keyboard and mouse to operate web pages. I really wanted to have something that interacts with the actual digital world that can do knowledge work.
+It just so turns out that this was extremely early, way too early, so early that we shouldn’t have been working on that. Because if you’re just stumbling your way around and keyboard mashing and mouse clicking and trying to get rewards in these environments, your reward is too sparse and you just won’t learn. You’re going to burn a forest computing, and you’re never going to get something off the ground. What you’re missing is this power of representation in the neural network.
+For example, today people are training those computer-using agents, but they’re doing it on top of a large language model. You have to get the language model first, you have to get the representations first, and you have to do that by all the 
+pre-training
+ and all the LLM stuff.
+I feel maybe loosely speaking, people kept trying to get the full thing too early a few times, where people really try to go after agents too early, I would say. That was Atari and Universe and even my own experience. You actually have to do some things first before you get to those agents. Now the agents are a lot more competent, but maybe we’re still missing some parts of that stack.
+I would say those are the three major buckets of what people were doing: training neural nets per-tasks, trying the first round of agents, and then maybe the LLMs and seeking the representation power of the neural networks before you tack on everything else on top.
+Dwarkesh Patel 
+00:07:02
+Interesting. If I were to 
+steelman
+ the 
+Sutton perspective
+, it would be that humans can just take on everything at once, or even animals can take on everything at once. Animals are maybe a better example because they don’t even have the scaffold of language. They just get thrown out into the world, and they just have to make sense of everything without any labels.
+The vision for AGI then should just be something which looks at sensory data, looks at the computer screen, and it just figures out what’s going on from scratch. If a human were put in a similar situation and had to be trained from scratch… This is like a human growing up or an animal growing up. Why shouldn’t that be the vision for AI, rather than this thing where we’re doing millions of years of training?
+Andrej Karpathy 
+00:07:41
+That’s a really good question. Sutton was on your podcast and I saw the podcast and 
+I had a write-up about that podcast
+ that gets into a bit of how I see things. I’m very careful to make analogies to animals because they came about by a very different optimization process. Animals are evolved, and they come with a huge amount of hardware that’s built in.
+For example, my example in the post was the zebra. A zebra gets born, and a few minutes later it’s running around and following its mother. That’s an extremely complicated thing to do. That’s not reinforcement learning. That’s something that’s baked in. Evolution obviously has some way of encoding the 
+weights
+ of our neural nets in 
+ATCGs
+, and I have no idea how that works, but it apparently works.
+Brains just came from a very different process, and I’m very hesitant to take inspiration from it because we’re not actually running that process. In my post, I said we’re not building animals. We’re building ghosts or spirits or whatever people want to call it, because we’re not doing training by evolution. We’re doing training by imitation of humans and the data that they’ve put on the Internet.
+You end up with these ethereal spirit entities because they’re fully digital and they’re mimicking humans. It’s a different kind of intelligence. If you imagine a space of intelligences, we’re starting off at a different point almost. We’re not really building animals. But it’s also possible to make them a bit more animal-like over time, and I think we should be doing that.
+One more point. I do feel Sutton has a very... His framework is, “We want to build animals.” I think that would be wonderful if we can get that to work. That would be amazing. If there were a single algorithm that you can just run on the Internet and it learns everything, that would be incredible. I’m not sure that it exists and that’s certainly not what animals do, because animals have this outer loop of evolution.
+A lot of what looks like learning is more like maturation of the brain. I think there’s very little reinforcement learning for animals. A lot of the reinforcement learning is more like motor tasks; it’s not intelligence tasks. So I actually kind of think humans don’t really use RL, roughly speaking.
+Dwarkesh Patel 
+00:09:52
+Can you repeat the last sentence? A lot of that intelligence is not motor task…it’s what, sorry?
+Andrej Karpathy 
+00:09:54
+A lot of the reinforcement learning, in my perspective, would be things that are a lot more motor-like, simple tasks like throwing a hoop. But I don’t think that humans use reinforcement learning for a lot of intelligence tasks like problem-solving and so on.
+ 
+That doesn’t mean we shouldn’t do that for research, but I just feel like that’s what animals do or don’t.
+Dwarkesh Patel 
+00:10:17
+I’m going to take a second to digest that because there are a lot of different ideas. Here’s one clarifying question I can ask to understand the perspective. You suggest that evolution is doing the kind of thing that pre-training does in the sense of building something which can then understand the world.
+The difference is that evolution has to be titrated in the case of humans through three gigabytes of DNA. That’s very unlike the weights of a model. Literally, the weights of the model are a brain, which obviously does not exist in the sperm and the egg. So it has to be grown. Also, the information for every single synapse in the brain simply cannot exist in the three gigabytes that exist in the DNA.
+Evolution seems closer to finding the algorithm which then does the lifetime learning. Now, maybe the lifetime learning is not analogous to RL, to your point. Is that compatible with the thing you were saying, or would you disagree with that?
+Andrej Karpathy 
+00:11:17
+I think so. I would agree with you that there’s some miraculous compression going on because obviously, the weights of the neural net are not stored in ATCGs. There’s some dramatic compression. There are some learning algorithms encoded that take over and do some of the learning online. I definitely agree with you on that. I would say I’m a lot more practically minded. I don’t come at it from the perspective of, let’s build animals. I come from it from the perspective of, let’s build useful things. I have a hard hat on, and I’m just observing that we’re not going to do evolution, because I don’t know how to do that.
+But it does turn out we can build these ghosts, spirit-like entities, by imitating internet documents. This works. It’s a way to bring you up to something that has a lot of built-in knowledge and intelligence in some way, similar to maybe what evolution has done. That’s why I call pre-training this crappy evolution. It’s the practically possible version with our technology and what we have available to us to get to a starting point where we can do things like reinforcement learning and so on.
+Dwarkesh Patel 
+00:12:15
+Just to steelman the other perspective, after doing this Sutton interview and thinking about it a bit, he has an important point here. Evolution does not give us the knowledge, really. It gives us the algorithm to find the knowledge, and that seems different from pre-training.
+Perhaps the perspective is that pre-training helps build the kind of entity which can learn better. It teaches meta-learning, and therefore it is similar to finding an algorithm. But if it’s “Evolution gives us knowledge, pre-training gives us knowledge,” that analogy seems to break down.
