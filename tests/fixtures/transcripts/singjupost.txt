@@ -1,0 +1,94 @@
+TRANSCRIPT: 
+Introduction
+SAM HARRIS:
+ I’m here with Tristan Harris. Tristan, it’s great to see you again.
+TRISTAN HARRIS:
+ Sam, it’s great to be back with you.
+SAM HARRIS:
+ So you’ve been busy. You’ve been busy worrying about social media for years. And you created this— in part created this documentary, The Social Dilemma, which it seems half of humanity saw.
+TRISTAN HARRIS:
+ Yeah.
+SAM HARRIS:
+ We still have a problem with social media, I’ll point out, but you, as much as anyone, alerted us to the nature of the problem and are continuing on that front. But now you have added to your portfolio concerns about AI, and there’s this new documentary, The AI Doc, which I just saw, which is very super watchable and entertaining in its own way, but also very worrying. And we’ll talk about the reasons to be worried here and maybe some of the reasons to be optimistic or at least cognizant of the upside should things go well. But there’s a lot to fear on the front of things not going well. So, well, let’s just take it from the top. When did you start worrying about AI?
+From Social Media to AI
+TRISTAN HARRIS:
+ Well, first, it’s just good to be back with you, Sam, because you really in a way helped launch my ability to speak on these topics with the 60 Minutes interview that I did in 2017. And then I remember recording in that same hotel our first podcast, which actually really got a lot of attention back in the day about persuasive technology.
+SAM HARRIS:
+ Yeah, yeah.
+TRISTAN HARRIS:
+ And in a way about the baby AI that was social media that was just pointed at your kid’s brain trying to figure out which photo, video, or tweet to put in front of your nervous system. And as we know, that little baby AI was enough to create the most anxious and depressed generation in our lifetimes, was enough to break down shared reality, polarise political parties much further, change the incentives of the entire media environment, basically colonise the entire world from that baby AI.
+But to get to your question, so how did we get into AI? First of all, I wasn’t wanting to switch into it. It was that I got calls from people inside the AI labs in January of 2023. This is like a month after, month and a half after ChatGPT had launched, I think. And these were friends I knew in the tech industry who were now at AI labs. And they basically said, “Tristan, there’s a huge step function in AI capabilities that’s coming. The world is not ready. Institutions are not ready. The government is not ready. The arms race dynamic between the companies is out of control. And we want your help to help raise awareness about this.”
+And so my first reaction was, aren’t there 1,000 people who’ve been working in AI safety and AI governance for a decade? And the challenge was just that all the PDFs that people had produced about policy and governance were just kind of not— it’s not like that was turning into actual action or policy. There’s a kind of material— you have to, what does Eric Weinstein call it? Confrontation with the unforgiving. Like you have to be affecting the actual incentives and institutions in the world.
+So basically, my co-founder and I, Aza Raskin, we interviewed the top 100 people in AI at that time. This is in January 2023. We turned that into a presentation.
+SAM HARRIS:
+ Co-founder of the Center for Humane Technology.
+TRISTAN HARRIS:
+ I co-founded the Center for Humane Technology, which is the nonprofit vehicle that’s been housing our work for the last decade, basically. And we ran off to New York, DC, and San Francisco, and we basically gave this presentation called The AI Dilemma that tried to show that we could predict the future that we were going to get with AI.
+Predicting the Future: Incentives and Outcomes
+If you look at the incentives, I think a huge problem that both the film, the AI doc, and our AI Dilemma presentation were trying to tackle is this myth that you can’t know which way the future is going to go. The future is uncertain. A million things can happen. These are just unintended consequences from technology. The best route is just to accelerate as fast as possible. And that is not true.
+And just to repeat a quote that is heard from every one of my interviews, but it’s because it’s so accurate. Charlie Munger, Warren Buffett’s business partner, saying, “If you show me the incentives, I’ll show you the outcome.” And with the incentives of social media being the race to maximize eyeballs and engagement, that would obviously produce the race to the bottom of the brainstem, shortening attention spans, bite-sized video, more extreme and outrageous content, sexualization of young people, the whole nine yards of everything.
+SAM HARRIS:
+ Hyper-partisanship.
+TRISTAN HARRIS:
+ Hyper-partisanship. And all of it happened. Like, there’s just a moment just to sort of soak in. Literally everything that we said was going to happen happened. And it’s not like we could predict all of it, but directionally you could know the contours of where we were going.
+And part of this relates to, I think, the mistake we make in technology.
+We get obsessed and seduced by the possible of a new technology, but we don’t look at the probable of the incentives and what’s likely to happen. So the possible of social media is, well, surely if we give everyone access to instant information at their fingertips and connect people to their friends, we’re going to have the least lonely generation we’ve ever had. We’re going to have the most enlightened and informed society we’ve ever had. And obviously the opposite of both of those things happened.
+And that’s not like, oh, we got this wrong, and that was just a mistake anyone could have made. All you have to do— to quote Donella Meadows and systems thinking— a system is what a system does. The system of social media was not optimizing to reduce loneliness and to create the most enlightened society. It was optimizing for just what is the perfect post, next video or tweet to keep you scrolling, doom scrolling by yourself, esophagus compressed on a Tuesday night. And that’s gotten us the world that we’re now living in.
+The AI Dilemma: Two Choices
+So we’ll get to AI. But basically the important lesson here is that, and kind of what motivates me with this movie, is you kind of have two choices. You either get a Chernobyl, which is a disaster from AI that then causes us to clamp down and to do something different, or you have enough basic clear-eyed wisdom and discernment and foresight. You know where this is going, and you can say, “Okay, let’s actually create guardrails in advance of a catastrophe.”
+And so this film, the AI doc, is really inspired by the history of the film The Day After from 1982 or ’83 about what would happen if there was nuclear war between the Soviet Union and the United States. That film was the largest watched synchronous television event in human history. It was primetime television. It was Tuesday night, 7 PM. You probably watched it.
+SAM HARRIS:
+ Yeah, yeah. I remember watching it at the time. And also famously, it got Reagan’s attention. He was worried as a result.
+TRISTAN HARRIS:
+ Yeah, that’s right. So Reagan watched it, I think, in the White House kind of viewing room or something. And in his biography, he writes about getting depressed for several weeks after watching it because you’re confronted with the possibility of annihilation of our species in a real way.
+And it’s important to know it’s not like we didn’t know what nuclear war was. Everyone knew what the atomic bomb looked like from the photos and videos of Hiroshima and all the nuclear tests. It’s not like people couldn’t imagine it, but there is a way that the actual consequences of continual escalation and nuclear wargaming that we weren’t really facing the visceral consequences of that. It kind of sat in humanity’s collective shadow, like our Jungian shadow. We didn’t want to confront that. The director, whose name I’m forgetting in this moment, speaks about this in his biography, that we just didn’t want to talk about this topic. Like, why would you ever want to talk about it?
+SAM HARRIS:
+ Yeah.
+TRISTAN HARRIS:
+ And by putting this film, The Day After, into the public consciousness of humanity and into leaders like Reagan, it was said that later when the Reykjavik meeting happened between Reagan and Gorbachev, the director of the film got a note from the White House saying, “Don’t think your film didn’t have something to do with enabling the conditions for this to happen.”
+So what that speaks to for me is if we all got crystal clear that we’re heading to an anti-human future that we don’t want to be going towards, and we saw that clearly and we saw it now, we could actually steer and do something different than what we’re doing. And that’s for me the motivation of the film, which I don’t— I think it doesn’t go all the way there, but it sets up the common knowledge for that possibility.
+The Optimists vs. The Worried: A Theory of Mind
+SAM HARRIS:
+ Yeah, well, there are two cases made in the film. Obviously, there’s the very worried/doomer case, which I think you and I both share to some degree. And then there are the people who seem capable of producing really an unmitigated stream of happy talk on this, and they don’t seem to concede anything to the claimed rationality of our fears.
+I’m wondering what you make of— I mean, I’ve asked this question of probably you in the past and many others on this topic, but what do you make of the people who are— of whom you can’t say they’re uninformed. I mean, some of these people are very close to the technology. Some of them are even developing the technology, and at least in Yann LeCun’s case, he is one of the actual progenitors of the technology, one of the three forefathers of it. But there are people who are deeply informed about all of these facts and yet won’t concede anything to the fears. What is your theory of mind of these people? Because some of them are in the film and they’re given the job of providing the other side of the story here.
+TRISTAN HARRIS:
+ Yeah. Maybe just to back up so the listeners understand— you’ll see it in the film if you go see it, but just understand the structure of the film. So the film kind of takes you on a tour of first the people who are focused on all the things that could go wrong. And so this is the risk folks— I don’t like using the term doomers because I think it reifies something that’s not really healthy. Someone who’s worried about the risk of a nuclear power plant, a doomer? No, they’re a safety person who cares about the nuclear power plant not melting down.
+SAM HARRIS:
+ “Doomers” is a term of disparagement launched by the people who don’t share these fears.
+TRISTAN HARRIS:
+ That’s right. So let’s not reify that. So the first section of the film is really focusing on those folks and their concerns, and it’s really devastating for the director. And the story and the conceit of the film is that the director is having a baby, and so he’s asking all of these people in AI, “Is now a good time to have a kid?” And I think that humanizes the question of what is the future we’re heading towards? Because in an abstract sense, it’s not that motivating. When I think about me and my kids, it anchors this discussion about AI in terms of the things that people most care about, which is their family.
+So then the film, after the director is confronted by all this and he gets overwhelmed and he kind of freaks out to his wife thinking, “Oh my God, I don’t know what to do,” and she says, “You have to go find hope.” And so he turns around and he goes out and he talks to all of the AI optimists. So this is Peter Diamandis, this is Guillaume Verdon, who is Beff Jezos, otherwise known as online, basically the tech accelerationists and people who think that our biggest risk is not going fast enough. Think of all the people with cancer or all the people whose lives that we won’t be able to save if we don’t make AI faster than we’re making it right now.
+The Asymmetry of Upsides and Downsides
+My reaction, going a step back, there’s a thing in AI that we have to acknowledge. There’s an asymmetry. The upsides don’t prevent the downsides. The downsides can undermine a world that can sustain the upsides. So, for example, the cancer drugs can’t prevent a new biological pathogen that’s designed to wipe out humanity. But the biological pathogen that can wipe out humanity undermines a world in which cancer drugs are relevant at all.
+SAM HARRIS:
+ Right.
+TRISTAN HARRIS:
+ AI generating GDP growth of 10-15% because it’s automating all science, all technology development, all military development, automating abundance— sounds great. But if the same AI that can do that also generates cyberweapons that can take down the entire financial system, which one of those things matters more? 15% GDP growth or the thing that can undermine the basis of money and GDP at all.
+SAM HARRIS:
+ Right.
+The Marshmallow Test and AI’s Maturity Challenge
+TRISTAN HARRIS:
+ So it’s very important. The film doesn’t actually make this point, and it’s one of the critical things that people do need to get, because in order to be optimistic, you have to actually mitigate the things that can go wrong. And I feel like AI is presenting us with essentially a maturity test. It’s almost like the marshmallow test, you know, in psychology, where if you wait and you actually mitigate the downsides, then you get the actual two marshmallows on the other side of the genuine benefits of AI. But if you sort of race to get the one marshmallow now and don’t mitigate the downsides, then you get the downsides. And I think that is not in the film, but is critical for people to get.
+SAM HARRIS:
+ Yeah. So then what do you make of the people who have all the facts in their heads, but they’re not worried, or claim to be not worried, about quite literally anything?
+TRISTAN HARRIS:
+ Yeah. Well, personally, I think there’s an intellectual dishonesty there, and I’m sure in past conversations you and I have had, Sam, over the years—
+Geoffrey Hinton’s Awakening
+SAM HARRIS:
+ But there’s an interesting case here. So to take someone who has finally had their religious epiphany here, but for the longest time didn’t, and this is literally the most informed person on Earth, Geoffrey Hinton. How do you explain that these problems weren’t obvious to him years ago?
+TRISTAN HARRIS:
+ I mean, so you’re saying for Hinton that he had an awakening?
+SAM HARRIS:
+ Yeah, so he was somebody who didn’t give really any credence to concerns about alignment that I’m aware of for years and years and years, as he was quite literally the father of this technology. And now he is basically right next to Eliezer Yudkowsky in his level of concern.
+TRISTAN HARRIS:
+ That’s right.
+SAM HARRIS:
+ Why? I mean, it’s not that he got more information really. So how do you explain his journey?
+TRISTAN HARRIS:
+ Well, so I don’t know his particular journey. You might just know more about what his awakening moment was. So I can’t really speak to that.
+SAM HARRIS:
+ I think it was just that he— I mean, this has always been a non sequitur from my point of view, but it was just his sense, I think this is what he said publicly, that the time horizon suddenly collapsed. We just suddenly made much more progress than anyone was expecting.
+TRISTAN HARRIS:
+ Well, that generally has been one of the things. I mean, it’s the thing that caused those AI engineers, kind of the Oppenheimers in January 2023, to reach out to me. And that’s what it felt like. It’s like you were getting calls from people inside this thing called the Manhattan Project before I knew what the Manhattan Project was.
+SAM HARRIS:
+ Right.
