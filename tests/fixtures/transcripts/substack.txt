@@ -1,0 +1,146 @@
+Doom Debates
+Subscribe
+Sign in
+Ben Goertzel Wants to Build AGI Even FASTER — AI Doom Debate
+One of the OGs of AGI research makes the case for decentralized acceleration
+Liron Shapira
+May 19, 2026
+Vitalik Buterin — Will “d/acc” Protect Humanity? — 
+Ken Stanley Debate — 
+https://lironshapira.substack.com/p/debate-with-a-former-openai-research
+Transcript
+Cold Open
+Ben Goertzel
+ 
+00:00:00
+It could well be that a superintelligence will, with high probability, converge on this sort of beneficial, compassionate value system, even if it starts off kind of nasty, and that might be the case. I’ve tried to convince myself it’s the case and haven’t quite managed to yet.
+Liron Shapira
+ 
+00:00:18
+I feel like that means that you agree with me that the orthogonality thesis is at least somewhat true, the idea that—
+Ben
+ 
+00:00:24
+No, I think it’s a very dishonest and misleading idea, actually.
+Liron
+ 
+00:00:31
+The problem is that we live on the same game board, and if I achieve my goal, then that could logically imply that you don’t achieve your goal, and we get a conflict. What are your thoughts?
+Ben
+ 
+00:00:38
+I think it’s a very childish and irrelevant way to look at the universe.
+Liron
+ 
+00:00:45
+So are you ready for the most important question of Doom Debate?
+Ben
+ 
+00:00:49
+Let’s go.
+Introducing Dr. Ben Goertzel
+Liron
+ 
+00:00:59
+Welcome to Doom Debates. My guest today is Dr. Ben Goertzel, a pioneering artificial intelligence researcher, entrepreneur, and author. He helped organize AGI as a research field in the 2000s through books, workshops, and conferences. He now leads SingularityNet, the OpenCog Foundation, and the AGI Society, which runs the annual Artificial General Intelligence Conference.
+Ben is generally optimistic about AGI. He argues that it’s more likely to benefit humanity if it’s developed in an open, decentralized way, rather than controlled by a small number of corporations, governments, or military institutions.
+Interestingly, though, some of his early AGI work was sponsored by the Singularity Institute, the organization that later became MIRI. But he strongly disagrees with Eliezer Yudkowsky’s more pessimistic view of AGI risk, including the core message of Eliezer and Nate Soares’ recent book, 
+If Anyone Builds It, Everyone Dies
+.
+For Ben, the debate over beneficial AGI has spanned more than two decades. I’m excited that he’s joined me on Doom Debates today to hash it all out. Dr. Ben Goertzel, welcome to Doom Debates.
+Ben
+ 
+00:02:06
+Hey, great to be here.
+Liron
+ 
+00:02:08
+All right, so you’ve got a long, wide-ranging career. Let’s get the overview here. You’ve worked in mathematics, cognitive science, bioinformatics, robotics, AGI. What has been the guiding aim of your research, and how has it evolved over time?
+Ben
+ 
+00:02:21
+The guiding aim of my research began as just a curious guy trying to understand how the universe functions, spanning the external universe and the internal universe and every other kind of universe or multiverse you could imagine.
+And then as I progressed in my career, I became more convinced of the radical good that AGI technology could do and became somewhat convinced that developing beneficial superintelligence may be the only way to stop our species from annihilating itself through various forms of stupidity and bad emotion and social organization gone awry.
+So I would say over the course of my career, my motivations have drifted a bit from just pure curiosity of trying to understand everything, enjoying tinkering with stuff, to “holy shit, if we can’t make beneficial general intelligence soon, our species may meet an unpleasant end.” On the other hand, if we can make it soon, we can cure aging and death and scarcity and open all these new horizons.
+So I’m still very curious and want to understand the universe, but the humanitarian and transhumanitarian motivation has become more prominent as I’ve advanced in age, I suppose.
+Liron
+ 
+00:04:06
+How did you first get into AI research or the concept of AGI?
+How Did Ben Get Interested in AGI?
+Ben
+ 
+00:04:11
+I first encountered the notion of smart machines in science fiction like most people in my generation. The original Star Trek and Space 1999, and then Isaac Asimov’s novels and so on and so forth.
+And then sometime around seventy-three, seventy-four, I found a book called 
+The Prometheus Project
+ in a used bookstore in Haddonfield, New Jersey. This was written by a Princeton physicist named Gerald Feinberg, and what he said in that book is, within a few decades, we’ll get machines smarter than people. We’ll be able to make nano machines that will build whatever we want, and we’ll be able to cure aging and involuntary death.
+And the question will then be, toward what end do we put this? Toward wild consciousness expansion or pointless rampant consumerism? And then the other question is, how do we decide this? He thought the UN should roll out digital computers all around the world to enable people to vote on what purpose all this amazing new technology should be put.
+So I read this nonfiction book I bought for a dollar or something in a used bookstore in suburban Jersey, and it made a lot of sense to me. I followed his arguments. It was basically 
+The Singularity Is Near
+ written in a little more serious academic tone. The book had been written, I think in ‘68. I encountered it in the early seventies. So that planted a seed in my mind because that wasn’t science fiction — it was a physics prof out of Princeton.
+Then a few years after that, it was probably 1980, I found Douglas Hofstadter’s book, 
+Gödel, Escher, Bach
+.
+Liron
+ 
+00:06:07
+Yeah.
+Ben
+ 
+00:06:08
+That book rolled through a lot of the thinking that was there in the AI and cognitive science field at that time — the mind is a collection of patterns and the brain is a complex self-organizing system. And if you can solve pattern recognition and abstraction and analogy, then maybe you can build a mind.
+So that gave me a clue of what at least some people in the AI field were working on. I was probably in ninth grade, first year of high school, when I read that book.
+Ben
+ 
+00:06:41
+That was right around the time I bought my first generally programmable computer. In the ‘70s, I built electronics kit computers that you had to program in hexadecimal machine code. But then I got an Atari 400 computer you could program in assembly language, FORTH, and BASIC. And I started trying to code AI systems, and with a machine with 16K of RAM, it was very challenging.
+Liron
+ 
+00:07:11
+Yeah, 16K is not enough.
+Ben
+ 
+00:07:13
+Yeah, you could do more tricks. You could override the tape drive buffer to get a little extra RAM with assembly language. But yeah, it was a far cry from what you have in a cheap mobile phone today.
+But it did bring me into a collision course with how difficult AI actually is. Because right away you start coding stuff that seems like it should work and it doesn’t work at all. And then you see what actually is the real challenge there — the way we think we’re solving problems isn’t how we’re actually solving problems. And then you come to grips with the fact that we don’t really understand how thinking works well enough to emulate it, which sort of set me on the course of my career.
+But at that time, the AI field was very boring. It was just locked up in rule-based expert systems and various dead-end approaches. So I ended up doing my bachelor’s and PhD in mathematics just because I figured math is not going to go out of style. It’s going to be useful for anything I’m going to want to pursue in life.
+Early AGI Enthusiast Community: Extropians & SL4
+Liron
+ 
+00:08:29
+Let’s talk about the early internet era of AGI discourse. I’m thinking late Usenet and then famously there was Eliezer Yudkowsky’s SL4 mailing list. You were pretty active on that. Talk about that era.
+Ben
+ 
+00:08:39
+So SL4 was sort of an extremist offshoot of the Extropy list as I experienced it at that time. As soon as the web became a thing, I was convinced this is how AI was going to emerge — it should be decentralized like the internet is decentralized. The domain name service system is decentralized.
+So I became possessed with the idea that you should have different nodes of the AI on different machines all over the world and they could be coordinating with no central owner or controller.
+Another thing that happened when the internet came out is you could connect with the 300 or 3 crazy people in the world who were interested in some obscure topic that you were also interested in. The advent of the web was really the first time I found this sizable community of people interested in AGI and mind uploading and time travel and all this crazy stuff that I’d been thinking about since I was a little kid.
+I had a few close friends who were semi-interested in these things, but until the internet, I hadn’t found a whole bunch of other people who had spent decades of their whole lives with wheels churning about how to make thinking machines or real immortality potions or whatnot.
+The Extropy list was an email list which was in the late ‘90s really the center of online discourse on all these transhumanist and advanced technology topics. Extropy, of course, was a coinage from Max Moore, I suppose, and his wife, Natasha Vita-More, who I still know both of them quite well. It was their notion of the sort of opposite of entropy — growth and expansion toward a more and more amazing and abundant future.
+At first, I was very annoyed with the Extropy community because they all seemed to be right-wing political libertarians, and I was sort of an anarcho-socialist. A good friend of mine, a Russian guy named Sasha Chislenko, I met through the Extropy list and later hired him for my first AI company, Webmind.
+And he was there when Eliezer Yudkowsky came and gave a talk at Webmind about how we should stop what we’re doing. But Sasha was such a hardcore right-wing libertarian — sweet, lovely guy — but he literally believed in the future every molecule in the air should have a barcode and you should only be allowed to breathe it if you have enough money to suck in the oxygen. And otherwise, if you didn’t have enough money, then you don’t deserve to breathe.
+This sort of thinking was around and wrapped up with all the futurist thinking, which annoyed me. On the other hand, it was the only place to go. At least you could argue the point. And we were going over and over on that email list about different ways of making AGI. If you mind upload, is your mind upload really yourself? What’s the best way to make a longevity remedy? Do you need to just activate DNA repair, or do you need to just put little nanobots through the body? You had Ralph Merkle there with the medical nanobots, and there was a variety of perspectives.
+Ben
+ 
+00:12:36
+There was one group that basically believed humans, with a bit of upgrade, will continue to rule the roost. Humans would make themselves a bit smarter. Maybe they get superpowers like Superman — they can fly, they don’t have to die, they can leap tall buildings in a single bound, maybe get their IQ boosted. But basically, it would be humans.
+Then there was another subgroup involving Eliezer Yudkowsky, myself, and some others — maybe 10% of the whole Extropy list — who thought it was obvious that humans are not anywhere near the ceiling of intelligence possible according to known physics, let alone whatever physics will look like after AGI reinvents and rediscovers physics.
+So it just seemed obvious to us that humans cannot run as fast as a race car, and we can’t fly as well as an airplane. Why would we happen to have evolved to be the most generally intelligent possible thing? And what my good friend Hugo de Garis — who I hadn’t met face to face at that point, but we were exchanging emails — as he put it, the amount of intelligence in a grain of sand could be quadrillion times the whole human species once you have femto computing and atto computing and so forth.
+So that was a sort of philosophical rift in the Extropy world. And Eliezer and I were thinking you can build a Jupiter brain that has unimaginably greater intelligence than humans.
+The SL4, Shock Level Four, email list sort of was born out of that. That was a list for people who were not shocked by anything and who had no problem conceiving that human beings would be roughly the same intelligence as an amoeba compared to a post-singularity superintelligence.
+Eliezer and I saw eye to eye on that, and at that time, Eliezer believed he knew how to build an ethical, beneficial superintelligence. So he was less worried about the existential risk because he thought he and only he knew how to build the thing.
+Is There Headroom Above Human Intelligence?
+Liron
+ 
+00:15:17
+I wanted to actually ask you more on that topic of how capable the AGI could be, and later we’ll go on to talk about something else you mentioned, that decentralization could be so important for AGI. We’ll revisit that when we talk about your latest projects.
+But let’s talk about how capable AGI could be because I personally agree with a lot of the stuff you’ve said, and I think this is actually still a debate today. The same debate that you were having in the late ‘90s about how much intelligence could you fit into a grain of sand. There are so many people today who actually make fun of people for thinking that superintelligence could be incredibly powerful. So I would ask you to elaborate on how much headroom there is above human intelligence.
+Ben
+ 
+00:15:59
+So there are a lot of people alive today who believe that if you fornicate outside of marriage, you will be tormented forever, boiling in a pit of oil for all eternity or something.
+Liron
+ 
+00:16:12
+Right. Wrongness is timeless.
