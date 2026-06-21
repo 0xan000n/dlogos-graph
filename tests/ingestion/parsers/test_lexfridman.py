@@ -2,10 +2,10 @@
 
 Reads a real (trimmed) fixture of ``lexfridman.com`` extracted text — no
 network — and asserts the parser recovers ordered, name-attributed,
-real-timestamped speaker turns from the ``Name (HH:MM:SS) text`` block layout,
-inherits the speaker across empty-name continuation blocks, and drops the
-page's title / "Episode links" / sponsor boilerplate. Stdlib + the shared
-schema only.
+real-timestamped speaker turns from the page's *multi-line* block layout
+(``Name`` / ``(HH:MM:SS)`` / text each on their own line), inherits the speaker
+across nameless continuation blocks of a monologue, and drops the chapter
+headings / pre-transcript chrome. Stdlib + the shared schema only.
 """
 
 from __future__ import annotations
@@ -27,7 +27,9 @@ def segments() -> list[TranscriptSegment]:
 
 
 def test_yields_several_segments(segments: list[TranscriptSegment]) -> None:
-    assert len(segments) >= 3
+    # The multi-line block layout must yield many turns, not zero (the prior
+    # single-line assumption produced 0 on the real page).
+    assert len(segments) >= 5
 
 
 def test_speakers_are_real_human_names(segments: list[TranscriptSegment]) -> None:
@@ -41,8 +43,8 @@ def test_speakers_are_real_human_names(segments: list[TranscriptSegment]) -> Non
 
 
 def test_first_turn_is_the_host_opening(segments: list[TranscriptSegment]) -> None:
-    # Pre-transcript boilerplate (page title, "Episode links", "Transcript"
-    # label, sponsor blurb) is dropped: the first real turn is Lex at 00:00:00.
+    # Pre-transcript chrome (page title, bio, "Menu", nav) is dropped: the first
+    # real turn is Lex at 00:00:00.
     first = segments[0]
     assert first.speaker == "Lex Fridman"
     assert first.t_start == 0.0
@@ -62,9 +64,10 @@ def test_captures_a_speaker_change(segments: list[TranscriptSegment]) -> None:
 def test_continuation_block_inherits_speaker(
     segments: list[TranscriptSegment],
 ) -> None:
-    # The third block has an empty speaker name in the source (line begins
-    # "(00:00:27) ...") — it is a continuation of Demis's monologue and must
-    # inherit his name rather than become an empty/None speaker.
+    # The third block has NO name line in the source (its timestamp line
+    # "(00:00:27)" is preceded directly by the previous turn's text) — it is a
+    # continuation of Demis's monologue and must inherit his name rather than
+    # become an empty/None speaker or steal a heading.
     third = segments[2]
     assert third.speaker == "Demis Hassabis"
     assert third.t_start == 27.0
@@ -77,8 +80,8 @@ def test_real_timestamps_are_parsed(segments: list[TranscriptSegment]) -> None:
     assert segments[1].t_start == 12.0
     assert segments[1].speaker == "Demis Hassabis"
     # A later turn carries a minutes-scale real offset (00:08:53 = 533s), which
-    # monotonic word-count synthesis could not have reached on this short slice
-    # — proof the source timestamps drive the spans.
+    # monotonic word-count synthesis could not have reached on this slice —
+    # proof the source timestamps drive the spans.
     assert any(s.t_start == 533.0 for s in segments)
 
 
@@ -92,11 +95,13 @@ def test_spans_are_monotonic_and_well_formed(
         prev_start = s.t_start
 
 
-def test_boilerplate_is_excluded(segments: list[TranscriptSegment]) -> None:
-    # Title/section labels never become their own turns, and the trailing
-    # "Subscribe ..." line (no timestamp header) is not emitted as a segment.
+def test_headings_and_chrome_are_excluded(
+    segments: list[TranscriptSegment],
+) -> None:
+    # Chapter headings ("Episode highlight", "Introduction", "Learnable patterns
+    # in nature") and the page title never become their own turns or speakers.
     joined_speakers = " ".join(s.speaker for s in segments)
-    assert "Transcript" not in joined_speakers
-    assert "Episode links" not in joined_speakers
+    for noise in ("Transcript", "Episode highlight", "Introduction"):
+        assert noise not in joined_speakers
     for s in segments:
-        assert not s.text.startswith("Subscribe to the Lex Fridman Podcast")
+        assert s.speaker in {"Lex Fridman", "Demis Hassabis"}

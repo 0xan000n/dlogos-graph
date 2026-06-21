@@ -1,30 +1,145 @@
-Transcript for Demis Hassabis: Future of AI, Simulating Reality, Physics and Video Games | Lex Fridman Podcast #475 - Lex Fridman
-Episode links:
-Demis Hassabis (Twitter): https://twitter.com/demishassabis
-Transcript
-This episode is presented by our sponsors. Check them out in the description.
-Lex Fridman (00:00:00) It’s hard for us humans to make any kind of clean predictions about highly nonlinear dynamical systems. But again, to your point, we might be very surprised what classical learning systems might be able to do about even fluid.
-Demis Hassabis (00:00:12) Yes, exactly. I mean, fluid dynamics, Navier-Stokes equations, these are traditionally thought of as very, very difficult intractable problems to do on classical systems. They take enormous amounts of compute, weather prediction systems. These kinds of things all involve fluid dynamics calculations.
-(00:00:27) But again, if you look at something like Veo, our video generation model, it can model liquids quite well, surprisingly well. And materials, specular lighting, I love the ones where there’s people who generate videos where there’s clear liquids going through hydraulic presses and then it’s being squeezed out. I used to write physics engines and graphics engines in my early days in gaming, and I know it’s just so painstakingly hard to build programs that can do that. And yet somehow these systems are reverse engineering from just watching YouTube videos. So presumably what’s happening is it’s extracting some underlying structure around how these materials behave. So perhaps there is some kind of lower dimensional manifold that can be learned if we actually fully understood what’s going on under the hood. That’s maybe true of most of reality.
-Lex Fridman (00:01:22) The following is a conversation with Demis Hassabis, his second time on the podcast. He is the leader of Google DeepMind and is now a Nobel Prize winner. Demis is one of the most brilliant and fascinating minds in the world today working on understanding and building intelligence and exploring the big mysteries of our universe. This was truly an honor and a pleasure for me.
-(00:01:51) This is the Lex Fridman Podcast. To support it, please check out our sponsors in the description and consider subscribing to this channel. And now, dear friends, here’s Demis Hassabis.
-Lex Fridman (00:02:06) In your Nobel Prize lecture, you propose what I think is a super interesting conjecture that “any pattern that can be generated or found in nature can be efficiently discovered and modeled by a classical learning algorithm.” What kind of patterns or systems might be included in that? Biology, chemistry, physics, maybe cosmology, neuroscience? What are we talking about?
-Demis Hassabis (00:02:32) Sure. Well, look, I felt that it’s sort of a tradition, I think, of Nobel Prize lectures that you’re supposed to be a little bit provocative and I wanted to follow that tradition. What I was talking about there is if you take a step back and you look at all the work that we’ve done, especially with the Alpha X projects, so I’m thinking AlphaGo, of course, AlphaFold, what they really are is we are building models of very combinatorially, high dimensional spaces that if you try to brute force a solution, find the best move and go, or find the exact shape of a protein, and if you enumerated all the possibilities, there wouldn’t be enough time in the time of the universe.
-(00:03:08) So you have to do something much smarter. And what we did in both cases was build models of those environments and that guided the search in a smart way and that makes it tractable. So if you think about protein folding, which is obviously a natural system, why should that be possible? How does physics do that? Proteins fold in milliseconds in our bodies, so somehow physics solves this problem that we’ve now also solved computationally. And I think the reason that’s possible is that in nature, natural systems have structure because they were subject to evolutionary processes that shape them. And if that’s true, then you can maybe learn what that structure is.
-Lex Fridman (00:03:49) This perspective I think is a really interesting one. You’ve hinted it at it, which is almost like crudely stated, anything that can be evolved can be efficiently modeled. Think there’s some truth to that?
-Demis Hassabis (00:04:03) Yeah. I sometimes call it survival of the stablest or something like that because of course there’s evolution for life, living things, but there’s also, if you think about geological times, so the shape of mountains, that’s been shaped by weathering processes over thousands of years, but then you can even take it cosmological, the orbits of planets, the shapes of asteroids. These have all been survived kind of processes that have acted on them many, many times.
-(00:04:31) If that’s true, then there should be some sort of pattern that you can kind of reverse learn and a kind of manifold really that helps you search to the right solution, to the right shape and actually allow you to predict things about it in an efficient way because it’s not a random pattern. So it may not be possible for man-made things or abstract things like factorizing large numbers because unless there’s patterns in the number space, which there might be, but if there’s not and it’s uniform, then there’s no pattern to learn, there’s no model to learn that will help you search. So you have to do brute force. So in that case you maybe need a quantum computer, something like this. But in most things in nature that we’re interested in are not like that. They have structure that evolved for a reason and survived over time. And if that’s true, I think that’s potentially learnable by a neural network.
-Lex Fridman (00:05:21) It’s like nature is doing a search process and it’s so fascinating that in that search process, it’s creating systems that could be efficiently modeled.
-Demis Hassabis (00:05:31) That’s right. Yeah.
-Lex Fridman (00:05:32) So interesting.
-Demis Hassabis (00:05:33) So they can be efficiently rediscovered or recovered because nature’s not random. Everything that we see around us, including the elements that are more stable, all of those things, they’re subject to some kind of selection process pressure.
-Lex Fridman (00:05:47) Do you think because you’re also a fan of theoretical computer science and complexity, do you think we can come up with a complexity class, like a complexity zoo type of class where maybe it’s the set of learnable systems, the set of learnable natural systems, LNS. This is a Demis Hassabis new class of systems that could be actually learnable by classical systems in this kind of way, natural systems that can be modeled efficiently.
-Demis Hassabis (00:06:17) Yeah, I mean I’ve always been fascinated by the P equals NP question and what is model-able by classical systems, i.e. non-quantum systems, Turing machines in effect. And that’s exactly what I’m working on actually in my few moments of spare time with a few colleagues about should there be maybe a new class or problem that is solvable by this type of neural network process and kind of mapped onto these natural systems, so the things that exist in physics and have structure. So I think that could be a very interesting new way of thinking about it. And it sort of fits with the way I think about physics in general, which is that I think information is primary, information is the most sort of fundamental unit of the universe, more fundamental than energy and matter. I think they can all be converted into each other, but I think of the universe as a kind of informational system.
-Lex Fridman (00:07:07) So when you think of the universe as an informational system, then the P equals NP question is a physics question.
-Demis Hassabis (00:07:14) That’s right.
-Lex Fridman (00:07:15) And is a question that can help us actually solve the entirety of this whole thing going on.
-Demis Hassabis (00:07:20) Yeah, I think it’s one of the most fundamental questions actually if you think of physics as informational and the answer to that, I think it’s going to be very enlightening.
-Lex Fridman (00:07:29) More specific to the P and MP question, again, some of the stuff we’re saying is kind of crazy right now just like the Christian Anfinsen Nobel Prize speech, controversial thing that he said sounded crazy and then you went and got a Nobel Prize for this with John Jumper, solved the problem. So let me just stick to the P equals NP. Do you think there’s something in this thing we’re talking about that could be shown if you can do something like a polynomial time or constant time compute ahead of time and construct this gigantic model, then you can solve some of these extremely difficult problems in a theoretical computer science kind of way?
-Demis Hassabis (00:08:12) Yeah, I think that there are actually a huge class of problems that could be couched in this way, the way we did AlphaGo and the way we did AlphaFold, where you model what the dynamics of the system is, the properties of that system, the environment that you are trying to understand, and then that makes the search for the solution or the prediction of the next step efficient. Basically polynomial times, so tractable by a classical system, which a neural network is. It runs on normal computers, right? Classical computers, Turing machines in effect. And I think it’s one of the most interesting questions there is, is how far can that paradigm go?
-(00:08:53) I think we’ve proven, and the AI community in general that classical systems, Turing machines can go a lot further than we previously thought. They can do things like model the structures of proteins and play go to better than world champion level. And a lot of people would’ve thought maybe 10, 20 years ago that was decades away, or maybe you would need some sort of quantum machines to quantum systems to be able to do things like protein folding. And so I think we haven’t really even sort of scratched the surface yet of what classical systems so-called could do.
-Subscribe to the Lex Fridman Podcast on YouTube, Apple Podcasts, and Spotify.
+Episode highlight
+
+Lex Fridman
+
+(00:00:00)
+
+It’s hard for us humans to make any kind of clean predictions about highly nonlinear dynamical systems. But again, to your point, we might be very surprised what classical learning systems might be able to do about even fluid.
+
+Demis Hassabis
+
+(00:00:12)
+
+Yes, exactly. I mean, fluid dynamics, Navier-Stokes equations, these are traditionally thought of as very, very difficult intractable problems to do on classical systems. They take enormous amounts of compute, weather prediction systems. These kinds of things all involve fluid dynamics calculations.
+
+(00:00:27)
+
+But again, if you look at something like Veo, our video generation model, it can model liquids quite well, surprisingly well. And materials, specular lighting, I love the ones where there’s people who generate videos where there’s clear liquids going through hydraulic presses and then it’s being squeezed out. I used to write physics engines and graphics engines in my early days in gaming, and I know it’s just so painstakingly hard to build programs that can do that. And yet somehow these systems are reverse engineering from just watching YouTube videos. So presumably what’s happening is it’s extracting some underlying structure around how these materials behave. So perhaps there is some kind of lower dimensional manifold that can be learned if we actually fully understood what’s going on under the hood. That’s maybe true of most of reality.
+
+Introduction
+
+Lex Fridman
+
+(00:01:22)
+
+The following is a conversation with Demis Hassabis, his second time on the podcast. He is the leader of Google DeepMind and is now a Nobel Prize winner. Demis is one of the most brilliant and fascinating minds in the world today working on understanding and building intelligence and exploring the big mysteries of our universe. This was truly an honor and a pleasure for me.
+
+(00:01:51)
+
+This is the Lex Fridman Podcast. To support it, please check out our sponsors in the description and consider subscribing to this channel. And now, dear friends, here’s Demis Hassabis.
+
+Learnable patterns in nature
+
+Lex Fridman
+
+(00:02:06)
+
+In your Nobel Prize lecture, you propose what I think is a super interesting conjecture that “any pattern that can be generated or found in nature can be efficiently discovered and modeled by a classical learning algorithm.” What kind of patterns or systems might be included in that? Biology, chemistry, physics, maybe cosmology, neuroscience? What are we talking about?
+
+Demis Hassabis
+
+(00:02:32)
+
+Sure. Well, look, I felt that it’s sort of a tradition, I think, of Nobel Prize lectures that you’re supposed to be a little bit provocative and I wanted to follow that tradition. What I was talking about there is if you take a step back and you look at all the work that we’ve done, especially with the Alpha X projects, so I’m thinking AlphaGo, of course, AlphaFold, what they really are is we are building models of very combinatorially, high dimensional spaces that if you try to brute force a solution, find the best move and go, or find the exact shape of a protein, and if you enumerated all the possibilities, there wouldn’t be enough time in the time of the universe.
+
+(00:03:08)
+
+So you have to do something much smarter. And what we did in both cases was build models of those environments and that guided the search in a smart way and that makes it tractable. So if you think about protein folding, which is obviously a natural system, why should that be possible? How does physics do that? Proteins fold in milliseconds in our bodies, so somehow physics solves this problem that we’ve now also solved computationally. And I think the reason that’s possible is that in nature, natural systems have structure because they were subject to evolutionary processes that shape them. And if that’s true, then you can maybe learn what that structure is.
+
+Lex Fridman
+
+(00:03:49)
+
+This perspective I think is a really interesting one. You’ve hinted it at it, which is almost like crudely stated, anything that can be evolved can be efficiently modeled. Think there’s some truth to that?
+
+Demis Hassabis
+
+(00:04:03)
+
+Yeah. I sometimes call it survival of the stablest or something like that because of course there’s evolution for life, living things, but there’s also, if you think about geological times, so the shape of mountains, that’s been shaped by weathering processes over thousands of years, but then you can even take it cosmological, the orbits of planets, the shapes of asteroids. These have all been survived kind of processes that have acted on them many, many times.
+
+(00:04:31)
+
+If that’s true, then there should be some sort of pattern that you can kind of reverse learn and a kind of manifold really that helps you search to the right solution, to the right shape and actually allow you to predict things about it in an efficient way because it’s not a random pattern. So it may not be possible for man-made things or abstract things like factorizing large numbers because unless there’s patterns in the number space, which there might be, but if there’s not and it’s uniform, then there’s no pattern to learn, there’s no model to learn that will help you search. So you have to do brute force. So in that case you maybe need a quantum computer, something like this. But in most things in nature that we’re interested in are not like that. They have structure that evolved for a reason and survived over time. And if that’s true, I think that’s potentially learnable by a neural network.
+
+Lex Fridman
+
+(00:05:21)
+
+It’s like nature is doing a search process and it’s so fascinating that in that search process, it’s creating systems that could be efficiently modeled.
+
+Demis Hassabis
+
+(00:05:31)
+
+That’s right. Yeah.
+
+Lex Fridman
+
+(00:05:32)
+
+So interesting.
+
+Demis Hassabis
+
+(00:05:33)
+
+So they can be efficiently rediscovered or recovered because nature’s not random. Everything that we see around us, including the elements that are more stable, all of those things, they’re subject to some kind of selection process pressure.
+
+Computation and P vs NP
+
+Lex Fridman
+
+(00:05:47)
+
+Do you think because you’re also a fan of theoretical computer science and complexity, do you think we can come up with a complexity class, like a complexity zoo type of class where maybe it’s the set of learnable systems, the set of learnable natural systems, LNS. This is a Demis Hassabis new class of systems that could be actually learnable by classical systems in this kind of way, natural systems that can be modeled efficiently.
+
+Demis Hassabis
+
+(00:06:17)
+
+Yeah, I mean I’ve always been fascinated by the P equals NP question and what is model-able by classical systems, i.e. non-quantum systems, Turing machines in effect. And that’s exactly what I’m working on actually in my few moments of spare time with a few colleagues about should there be maybe a new class or problem that is solvable by this type of neural network process and kind of mapped onto these natural systems, so the things that exist in physics and have structure. So I think that could be a very interesting new way of thinking about it. And it sort of fits with the way I think about physics in general, which is that I think information is primary, information is the most sort of fundamental unit of the universe, more fundamental than energy and matter. I think they can all be converted into each other, but I think of the universe as a kind of informational system.
+
+Lex Fridman
+
+(00:07:07)
+
+So when you think of the universe as an informational system, then the P equals NP question is a physics question.
+
+Demis Hassabis
+
+(00:07:14)
+
+That’s right.
+
+Lex Fridman
+
+(00:07:15)
+
+And is a question that can help us actually solve the entirety of this whole thing going on.
+
+Demis Hassabis
+
+(00:07:20)
+
+Yeah, I think it’s one of the most fundamental questions actually if you think of physics as informational and the answer to that, I think it’s going to be very enlightening.
+
+Lex Fridman
+
+(00:07:29)
+
+More specific to the P and MP question, again, some of the stuff we’re saying is kind of crazy right now just like the Christian Anfinsen Nobel Prize speech, controversial thing that he said sounded crazy and then you went and got a Nobel Prize for this with John Jumper, solved the problem. So let me just stick to the P equals NP. Do you think there’s something in this thing we’re talking about that could be shown if you can do something like a polynomial time or constant time compute ahead of time and construct this gigantic model, then you can solve some of these extremely difficult problems in a theoretical computer science kind of way?
+
+Demis Hassabis
+
+(00:08:12)
+
+Yeah, I think that there are actually a huge class of problems that could be couched in this way, the way we did AlphaGo and the way we did AlphaFold, where you model what the dynamics of the system is, the properties of that system, the environment that you are trying to understand, and then that makes the search for the solution or the prediction of the next step efficient. Basically polynomial times, so tractable by a classical system, which a neural network is. It runs on normal computers, right? Classical computers, Turing machines in effect. And I think it’s one of the most interesting questions there is, is how far can that paradigm go?
+
+(00:08:53)
+
+I think we’ve proven, and the AI community in general that classical systems, Turing machines can go a lot further than we previously thought. They can do things like model the structures of proteins and play go to better than world champion level. And a lot of people would’ve thought maybe 10, 20 years ago that was decades away, or maybe you would need some sort of quantum machines to quantum systems to be able to do things like protein folding. And so I think we haven’t really even sort of scratched the surface yet of what classical systems so-called could do.
+
+(00:09:28)
+
+And of course, AGI being built on a neural network system on top of a neural network system on top of a classical computer would be the ultimate expression of that. And I think the limit, what the bounds of that kind of system, what it can do, it’s a very interesting question and directly speaks to the P equals NP question.
