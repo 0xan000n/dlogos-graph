@@ -54,6 +54,7 @@ from dlogos.ingestion.parsers import (
     substack,
     tgs,
 )
+from dlogos.ingestion.speaker_enrich import enrich_speakers
 from dlogos.ingestion.transcript_extract import html_to_text, pdf_to_text
 from dlogos.pipeline import EpisodeInput
 from dlogos.schema import Episode, Transcript, TranscriptSegment
@@ -64,6 +65,7 @@ __all__ = [
     "TranscriptBackend",
     "parser_for_url",
     "build_episodes_from_corpus",
+    "known_speakers_map",
 ]
 
 #: A pure transcript parser: readable text → ordered segments.
@@ -189,6 +191,7 @@ class TranscriptBackend:
         language: str = "en",
         timeout: float = 60.0,
         fetch_text: Callable[[str], tuple[str, str]] | None = None,
+        known_speakers_for: Callable[[str], list[str]] | None = None,
     ) -> None:
         self._language = language
         self._timeout = timeout
@@ -197,6 +200,11 @@ class TranscriptBackend:
         # fully replaces the network + extract path, so no fixture ever hits bs4/
         # pypdf or httpx unless the real path runs.
         self._fetch_text = fetch_text
+        # Optional hook: (url) -> the episode's known speaker FULL names (host +
+        # guests). When set, parsed segment labels are enriched against it (bare
+        # first names → full names, stray non-speaker labels left as-is) before
+        # the Transcript is built. None disables enrichment (labels kept verbatim).
+        self._known_speakers_for = known_speakers_for
         self._cache_dir: Path | None = (
             Path(cache_dir) if cache_dir is not None else None
         )
@@ -281,6 +289,18 @@ class TranscriptBackend:
         parser = parser_for_url(audio_path)
         text, _fmt = self._read_text(audio_path)
         segments = parser(text)
+
+        # Enrich speaker labels against the episode's known full names (host +
+        # guests) BEFORE building the Transcript: bare first names ("Jim",
+        # "Nate") become full names, ambiguous/unknown labels are left as-is.
+        if self._known_speakers_for is not None:
+            segments = enrich_speakers(segments, self._known_speakers_for(audio_path))
+
+        # Always sort by (t_start, t_end) so segment ordering is correct even when
+        # a parser emits an out-of-order span (e.g. the 80k page that surfaced an
+        # 8487s segment first). Stable sort keeps equal-span ties in parse order.
+        segments = sorted(segments, key=lambda s: (s.t_start, s.t_end))
+
         duration_s = segments[-1].t_end if segments else 0.0
         transcript = Transcript(
             episode_id=_episode_id_from_url(audio_path),
@@ -354,3 +374,39 @@ def build_episodes_from_corpus(
             )
         )
     return episodes
+
+
+def _episode_known_speakers(row: dict[str, Any]) -> list[str]:
+    """The episode's known full names: its ``host`` then its ``guests``.
+
+    Order is host-first, de-duplicated (preserving first occurrence). Blank
+    entries are dropped. These are the full names :func:`enrich_speakers` maps
+    bare/ambiguous labels onto.
+    """
+
+    names: list[str] = []
+    host = (row.get("host") or "").strip()
+    if host:
+        names.append(host)
+    for guest in row.get("guests", []) or []:
+        g = (guest or "").strip()
+        if g:
+            names.append(g)
+    return list(dict.fromkeys(names))
+
+
+def known_speakers_map(corpus_path: str | Path) -> dict[str, list[str]]:
+    """Map each episode's transcript URL → its known speaker full names.
+
+    Reads the corpus JSON and returns ``{url: [host, *guests]}`` (host first,
+    de-duplicated, blanks dropped) — exactly the ``known_speakers`` list
+    :class:`TranscriptBackend`'s ``known_speakers_for`` hook needs to enrich that
+    URL's parsed segment labels. The slice driver builds this once from the
+    corpus and passes ``known_speakers_for=lambda url: m.get(url, [])`` so each
+    transcribe enriches against the right episode's roster.
+
+    Pure given the file contents: reads the JSON, no network.
+    """
+
+    data = json.loads(Path(corpus_path).read_text(encoding="utf-8"))
+    return {row["url"]: _episode_known_speakers(row) for row in data["episodes"]}

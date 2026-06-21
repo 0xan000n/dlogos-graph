@@ -327,11 +327,19 @@ def _build_live_slice(settings: Any, args: argparse.Namespace) -> _LiveSlice:
     # single backend serves the whole batch -> one Pipeline.run. The extractor is
     # the same DeepInfra extractor in the claims-cache path for every mode.
     if args.transcripts:
-        from dlogos.ingestion.transcript_source import TranscriptBackend
+        from dlogos.ingestion.transcript_source import (
+            TranscriptBackend,
+            known_speakers_map,
+        )
 
+        # Build {url -> [host, *guests]} once from the corpus so the backend can
+        # enrich each transcript's bare/ambiguous speaker labels ("Jim" ->
+        # "Jim Rutt", "Nate" -> the episode's actual Nate) to full names.
+        speakers_by_url = known_speakers_map(args.transcripts)
         asr = TranscriptBackend(
             cache_dir=str(out_dir / "transcript_cache"),
             language=args.language,
+            known_speakers_for=lambda url: speakers_by_url.get(url, []),
         )
     else:
         from dlogos.asr.hosted_backend import AssemblyAIBackend

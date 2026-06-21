@@ -32,10 +32,11 @@ from dlogos.ingestion.transcript_source import (
     REGISTRY,
     TranscriptBackend,
     build_episodes_from_corpus,
+    known_speakers_map,
     parser_for_url,
 )
 from dlogos.pipeline import EpisodeInput
-from dlogos.schema import Transcript
+from dlogos.schema import Transcript, TranscriptSegment
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "transcripts"
 _CORPUS = (
@@ -309,3 +310,108 @@ def test_build_episodes_over_real_corpus_covers_all_20() -> None:
         # Each episode's URL has a registered parser (the end-to-end coverage).
         assert callable(parser_for_url(ep.audio_path)), ep.episode.episode_id
         assert ep.domains == ["ai-safety"]
+
+
+# --------------------------------------------------------------------------- #
+# Speaker enrichment + segment sorting (the known_speakers_for hook)
+# --------------------------------------------------------------------------- #
+class _FakeParser:
+    """A stand-in parser returning fixed segments, registered for a fake host.
+
+    Lets the backend test exercise the enrich + sort wiring deterministically,
+    independent of any real source's quirks, with the fetch hook injected.
+    """
+
+    def __init__(self, segments: list[TranscriptSegment]) -> None:
+        self._segments = segments
+
+    def __call__(self, _text: str) -> list[TranscriptSegment]:
+        return list(self._segments)
+
+
+def test_transcribe_enriches_speaker_labels(tmp_path, monkeypatch) -> None:
+    """``known_speakers_for`` rewrites bare first names to full names on parse.
+
+    A fake parser emits "Jim"/"Nate" labels; with a known-speaker hook returning
+    the episode roster, the resulting Transcript carries the full names.
+    """
+
+    segs = [
+        TranscriptSegment(speaker="Jim", text="a", t_start=0.0, t_end=1.0),
+        TranscriptSegment(speaker="Nate", text="b", t_start=1.0, t_end=2.0),
+    ]
+    monkeypatch.setitem(REGISTRY, "fake-host.test", _FakeParser(segs))
+
+    backend = TranscriptBackend(
+        fetch_text=lambda _url: ("ignored", "html"),
+        cache_dir=tmp_path,
+        known_speakers_for=lambda _url: ["Jim Rutt", "Nate Soares"],
+    )
+    transcript = backend.transcribe("https://fake-host.test/ep")
+
+    assert [s.speaker for s in transcript.segments] == ["Jim Rutt", "Nate Soares"]
+
+
+def test_transcribe_without_hook_keeps_labels_verbatim(tmp_path, monkeypatch) -> None:
+    """With no ``known_speakers_for`` hook, labels pass through unchanged."""
+
+    segs = [TranscriptSegment(speaker="Jim", text="a", t_start=0.0, t_end=1.0)]
+    monkeypatch.setitem(REGISTRY, "fake-host.test", _FakeParser(segs))
+
+    backend = TranscriptBackend(
+        fetch_text=lambda _url: ("ignored", "html"), cache_dir=tmp_path
+    )
+    transcript = backend.transcribe("https://fake-host.test/ep")
+
+    assert [s.speaker for s in transcript.segments] == ["Jim"]
+
+
+def test_transcribe_sorts_out_of_order_segments(tmp_path, monkeypatch) -> None:
+    """Segments are sorted by (t_start, t_end), fixing an out-of-order parse.
+
+    Mirrors the 80k page that surfaced an 8487s segment first: a later span is
+    re-ordered ahead of it, and duration becomes the true max t_end.
+    """
+
+    segs = [
+        TranscriptSegment(speaker="A", text="late", t_start=8487.0, t_end=8490.0),
+        TranscriptSegment(speaker="B", text="early", t_start=0.0, t_end=5.0),
+        TranscriptSegment(speaker="A", text="mid", t_start=5.0, t_end=10.0),
+    ]
+    monkeypatch.setitem(REGISTRY, "fake-host.test", _FakeParser(segs))
+
+    backend = TranscriptBackend(
+        fetch_text=lambda _url: ("ignored", "html"), cache_dir=tmp_path
+    )
+    transcript = backend.transcribe("https://fake-host.test/ep")
+
+    starts = [s.t_start for s in transcript.segments]
+    assert starts == sorted(starts)
+    assert [s.text for s in transcript.segments] == ["early", "mid", "late"]
+    assert transcript.duration_s == 8490.0
+
+
+def test_known_speakers_map_reads_host_and_guests(tmp_path) -> None:
+    """``known_speakers_map`` returns {url: [host, *guests]} per episode."""
+
+    m = known_speakers_map(_write_corpus(tmp_path))
+
+    assert m["https://www.jimruttshow.com/x/transcript-of-ep-327/"] == [
+        "Jim Rutt",
+        "Nate Soares",
+    ]
+    assert m["https://www.thegreatsimplification.com/x/TGS-214.pdf"] == [
+        "Nate Hagens",
+        "Tristan Harris",
+    ]
+
+
+def test_known_speakers_map_over_real_corpus_covers_all_20() -> None:
+    """Every real-corpus URL maps to a non-empty host+guests roster."""
+
+    m = known_speakers_map(_CORPUS)
+    assert len(m) == 20
+    for url, names in m.items():
+        assert names, url
+        assert all(isinstance(n, str) and n.strip() for n in names)
+
