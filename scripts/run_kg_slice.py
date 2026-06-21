@@ -14,12 +14,17 @@ After the load it exports ``out/graph.json`` for the localhost viewer and prints
 a :class:`~dlogos.eval.fragmentation.FragReport` over a small built-in probe set
 — the resolution-quality number ("how close to one node per real entity?").
 
-Two run modes, both off the same injectable core (:func:`run_kg_slice`):
+Three run modes, all off the same injectable core (:func:`run_kg_slice`):
 
-    # A) a real corpus-manifest slice (the live experiment — the USER runs this):
+    # A) a real corpus-manifest slice (audio via AssemblyAI ASR):
     uv run python scripts/run_kg_slice.py --manifest manifests/slice.json
 
-    # B) an explicit list of local audio files (dev / offline-ish):
+    # B) the 20 public *text* transcripts (NO ASR — fetch + parse the text,
+    #    real speaker names canonicalized by the name-driven resolver):
+    uv run python scripts/run_kg_slice.py \\
+        --transcripts docs/corpus/ai_sensemaking_20.json
+
+    # C) an explicit list of local audio files (dev / offline-ish):
     uv run python scripts/run_kg_slice.py \\
         --audio-files ep1.mp3 ep2.mp3 --show-id the-indicator
 
@@ -245,6 +250,32 @@ def _build_episodes_from_audio_files(
     return episodes
 
 
+def _episodes_from_transcript_corpus(corpus_path: str) -> list[dict[str, Any]]:
+    """Read the public-text-transcript corpus into ``run_kg_slice`` episode dicts.
+
+    Builds the canonical :class:`~dlogos.pipeline.EpisodeInput` per corpus row via
+    :func:`~dlogos.ingestion.transcript_source.build_episodes_from_corpus` (the
+    single source of truth for the corpus→EpisodeInput mapping, also covered by
+    its own offline test), then flattens each to the ``dict`` shape
+    :func:`run_kg_slice`'s ``_ep_input`` consumes. ``audio_path`` is the transcript
+    URL the injected :class:`TranscriptBackend` fetches + parses.
+    """
+
+    from dlogos.ingestion.transcript_source import build_episodes_from_corpus
+
+    out: list[dict[str, Any]] = []
+    for ep in build_episodes_from_corpus(corpus_path):
+        out.append(
+            {
+                "episode": ep.episode,
+                "audio_path": ep.audio_path,
+                "metadata_guest_names": list(ep.metadata_guest_names),
+                "domains": list(ep.domains),
+            }
+        )
+    return out
+
+
 @dataclass
 class _LiveSlice:
     """The constructed live backends + episode list for a real slice run."""
@@ -274,7 +305,6 @@ def _build_live_slice(settings: Any, args: argparse.Namespace) -> _LiveSlice:
     # from the in-memory smoke driver, per the plan) + the real backend factories.
     from run_smoke_inmemory import CachingASR, CachingExtractor
 
-    from dlogos.asr.hosted_backend import AssemblyAIBackend
     from dlogos.extraction.extractor import ClaimExtractor
     from dlogos.resolution.canonical_store import SqliteCanonicalStore
     from dlogos.resolution.cascade import llm_adjudicator_from_client
@@ -289,14 +319,29 @@ def _build_live_slice(settings: Any, args: argparse.Namespace) -> _LiveSlice:
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Shared real backends (one ASR + one extractor across the slice -> a single
-    # Pipeline.run over the whole batch in run_kg_slice).
-    asr = CachingASR(
-        AssemblyAIBackend(
-            language_code=args.language,
-            speakers_expected=args.speakers_expected,
+    # The "ASR" backend depends on the episode source. For the public-text-
+    # transcript slice (--transcripts) there is NO audio: the TranscriptBackend
+    # fetches each transcript URL and parses it (real speaker NAMES, no
+    # diarization). For audio sources (--manifest / --audio-files) it is the
+    # AssemblyAI ASR wrapped in the content-hash transcript cache. Either way a
+    # single backend serves the whole batch -> one Pipeline.run. The extractor is
+    # the same DeepInfra extractor in the claims-cache path for every mode.
+    if args.transcripts:
+        from dlogos.ingestion.transcript_source import TranscriptBackend
+
+        asr = TranscriptBackend(
+            cache_dir=str(out_dir / "transcript_cache"),
+            language=args.language,
         )
-    )
+    else:
+        from dlogos.asr.hosted_backend import AssemblyAIBackend
+
+        asr = CachingASR(
+            AssemblyAIBackend(
+                language_code=args.language,
+                speakers_expected=args.speakers_expected,
+            )
+        )
     extractor = CachingExtractor(ClaimExtractor.from_settings(settings))
     embedder = OpenAICompatibleEmbedder.from_settings(settings)
 
@@ -325,10 +370,12 @@ def _build_live_slice(settings: Any, args: argparse.Namespace) -> _LiveSlice:
     )
     speaker_resolver = NameSpeakerResolver(speaker_store)
 
-    # Episode source: a corpus manifest (resolved to recent episodes) OR an
-    # explicit list of local audio files.
+    # Episode source: the public-text-transcript corpus, OR a corpus manifest
+    # (resolved to recent episodes), OR an explicit list of local audio files.
     known_hosts: list[str] = []
-    if args.manifest:
+    if args.transcripts:
+        episodes = _episodes_from_transcript_corpus(args.transcripts)
+    elif args.manifest:
         episodes, known_hosts = _episodes_from_manifest(settings, args)
     else:
         episodes = _build_episodes_from_audio_files(
@@ -433,6 +480,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     src = p.add_argument_group("episode source (choose one)")
     src.add_argument(
+        "--transcripts",
+        default=None,
+        help="A public-text-transcript corpus JSON (e.g. "
+        "docs/corpus/ai_sensemaking_20.json): fetch + parse each transcript URL, "
+        "no ASR. Speaker NAMES drive resolution directly.",
+    )
+    src.add_argument(
         "--manifest",
         default=None,
         help="A CorpusManifest JSON (rows resolved to recent episodes).",
@@ -464,9 +518,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 async def _amain(argv: Sequence[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
-    if not args.manifest and not args.audio_files:
-        print("error: provide --manifest OR --audio-files. See --help.",
-              file=sys.stderr)
+    if not args.transcripts and not args.manifest and not args.audio_files:
+        print("error: provide --transcripts OR --manifest OR --audio-files. "
+              "See --help.", file=sys.stderr)
         return 2
 
     from dlogos.config import settings
