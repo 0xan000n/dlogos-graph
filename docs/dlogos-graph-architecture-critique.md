@@ -10,6 +10,8 @@ The proposed layer is worth building, but it should be framed externally as a **
 
 The central architectural bet is sound: agents should not rediscover "who said what about whom, when" from transcript chunks every time they answer a question. At podcast scale, that becomes expensive, noisy, slow, and hard to cite. The system should normalize dialogue on the write path and serve precomputed, provenance-rich views on the read path.
 
+There is one important refinement: the graph should not be the primary broad retrieval substrate for claims. It should be the **identity, provenance, and relationship index around a columnar claim/event store**. Broad "find and rank the right claims among billions" queries should start in the fact/index layer, then use the graph to enrich, explain, and connect the bounded result set.
+
 The biggest caveat is that the moat is not "having a graph." The moat is **resolved identity plus source-grounded claims plus freshness plus evaluation discipline**. Resolution quality, citation precision, speaker attribution, and view freshness are the company-grade problems. Storage and retrieval are important, but they are not the hardest part.
 
 ## Materials Reviewed
@@ -23,6 +25,8 @@ The biggest caveat is that the moat is not "having a graph." The moat is **resol
   - [Lost in the Middle: How Language Models Use Long Contexts](https://arxiv.org/abs/2307.03172)
   - [U-NIAH: Unified RAG and LLM Evaluation for Long Context Needle-In-A-Haystack](https://arxiv.org/abs/2503.00353)
   - [Filtered Approximate Nearest Neighbor Search in Vector Databases](https://arxiv.org/abs/2602.11443)
+  - [FalkorDB: Graph Database Anti-Patterns in AI Performance](https://www.falkordb.com/blog/graph-database-anti-patterns-ai-performance/)
+  - [Particula: GraphRAG implementation lessons on a 12M-node enterprise data platform](https://particula.tech/blog/graphrag-implementation-enterprise-data-platform)
   - [Model Context Protocol architecture](https://modelcontextprotocol.io/docs/learn/architecture)
   - [Podcast Index API docs](https://podcastindex-org.github.io/docs-api/)
   - [Podcast namespace transcript tag](https://raw.githubusercontent.com/Podcastindex-org/podcast-namespace/main/docs/tags/transcript.md)
@@ -97,7 +101,7 @@ The proposed separation is sensible:
 
 - Object storage for audio and transcript text.
 - Columnar/OLAP storage for claim facts and aggregations.
-- Graph storage for identity and relationship traversal.
+- Graph storage for identity, provenance, bounded relationship enrichment, and representative neighborhoods.
 - Vector index for blocking, resolution candidates, and constrained semantic retrieval.
 
 ClickHouse-style OLAP is a good fit for "claims over time" because the dominant analytical workload is filtered grouping over many rows. The graph should not be asked to be a bulk analytical store. The vector index should not be asked to be the source of truth.
@@ -112,7 +116,7 @@ GraphRAG research supports the main shape of the proposal: extract structure fro
 - **Global search:** corpus-level answers using community summaries.
 - **Basic search:** ordinary top-k vector retrieval when appropriate.
 
-dLogos should adopt that distinction. Some user questions are best answered by exact identity lookup, some by graph traversal, some by OLAP aggregation, and some by constrained semantic search. A single vector search endpoint should not be the universal path.
+dLogos should adopt that distinction while keeping traversal bounded. Some user questions are best answered by exact identity lookup, some by columnar aggregation, some by constrained semantic search, and some by graph enrichment over a bounded candidate set. A single vector search endpoint should not be the universal path, and a single graph traversal endpoint should not be the universal path either.
 
 ### Why Long Context Does Not Remove The Need
 
@@ -143,6 +147,46 @@ Implication: the production vector layer needs explicit benchmarks for filtered 
 - by confidence threshold
 
 The right implementation may differ for resolution blocking versus user-facing retrieval.
+
+### Why Graph Traversal Has Its Own Scale Trap
+
+The engineer's concern about a very large graph is correct. It is a different failure mode from vector-retrieval dilution. The named graph problem is **supernodes plus traversal explosion**.
+
+A high-degree node such as `AGI`, `OpenAI`, `AI safety`, `Lex Fridman`, `Joe Rogan`, or `Elon Musk` can accumulate enormous edge counts. Even a one-hop traversal may return millions of adjacent claims, speakers, episodes, and related concepts. Therefore "keep traversals to one or two hops" is not sufficient. One hop from a broad node can already be too much.
+
+The key architectural rule should be:
+
+> Never start broad retrieval from a popular graph node and expand. Start from the most selective predicate in the columnar or indexed layer, then use graph lookups to enrich and explain the bounded candidate set.
+
+Unsafe pattern:
+
+```text
+AGI -> all claims -> all speakers -> all disputes -> rank
+```
+
+Safer pattern:
+
+```sql
+claims
+WHERE subject_canonical_id = 'concept-agi'
+  AND event_time >= now() - interval 90 day
+  AND confidence >= 0.75
+ORDER BY rank_score DESC
+LIMIT 100
+```
+
+Then graph lookups can add:
+
+- claim provenance
+- canonical speaker metadata
+- canonical entity metadata
+- selected representative disputes
+- related episode links
+- rollup/community context
+
+This distinction is fundamental. The graph is excellent for identity, provenance, typed relationships, representative neighborhoods, and explanation. It is dangerous as an unbounded runtime search space for popular entities.
+
+The PoC already showed the seed of this problem: dense `agrees_with` relation derivation can explode quickly. If many claims share a subject, naive pairwise agreement/disagreement edges can become quadratic. At scale, broad agreement/disagreement should be represented with clusters, rollups, and representative edges rather than every possible claim-to-claim edge.
 
 ## Fit With The dLogos Product
 
@@ -308,7 +352,31 @@ Avoid presenting a single scalar as truth. Prefer:
 
 The product should say "in this corpus, among these speakers, this distribution shifted" rather than "the field believes X."
 
-### 5. Materialized View Freshness Is A Core System, Not Plumbing
+### 5. Supernodes And Traversal Explosion Are A Permanent Burden
+
+The graph will develop supernodes. This is not an edge case. Popular concepts, companies, guests, and hosts will naturally collect huge neighborhoods.
+
+The dangerous assumption is:
+
+```text
+query the graph = traverse outward until the answer appears
+```
+
+That query pattern should not exist in product, API, MCP, or CLI surfaces. It recreates the graph version of the haystack problem: too many adjacent nodes, wrong truncation, unpredictable latency, and inflated LLM context costs.
+
+The system needs explicit supernode discipline:
+
+- detect and label high-degree entities, speakers, and concepts
+- deny or rewrite broad traversal plans from supernodes
+- require selective filters before expansion
+- cap hops, nodes, edges, and wall-clock time
+- prefer rollup reads for high-degree nodes
+- return partial-result explanations rather than silently truncating
+- track traversal fanout metrics as production health signals
+
+The graph should answer bounded questions such as "explain these 50 claims" or "show representative disputes for this entity in this time window." It should not answer "walk outward from `AGI` and find the best context."
+
+### 6. Materialized View Freshness Is A Core System, Not Plumbing
 
 Dirty-set propagation is correctly called out as hard. It needs first-class design:
 
@@ -324,7 +392,7 @@ Dirty-set propagation is correctly called out as hard. It needs first-class desi
 
 Without this, the read path will lie silently.
 
-### 6. Rights, Takedowns, And Voiceprints Need Early Policy
+### 7. Rights, Takedowns, And Voiceprints Need Early Policy
 
 The architecture discusses storage and identity, but production needs legal and trust policy around:
 
@@ -389,6 +457,60 @@ Suggested claim fact fields:
 - `citation_quality`
 - `speaker_attribution_quality`
 
+### Make Broad Retrieval Columnar-First
+
+The production query planner should not begin with a graph traversal when the question is broad. It should begin with the most selective fact/index operation available.
+
+Examples:
+
+- "top claims about OpenAI last month" starts in the claim fact table
+- "who discussed AGI most this quarter" starts as an OLAP aggregation
+- "recent disputes about model security" starts with filtered claims, then relation enrichment
+- "episodes related to this claim" starts from the claim id, then bounded graph lookups
+
+The general pattern should be:
+
+```text
+filter/rank candidates in columnar or vector index
+  -> limit to a bounded candidate set
+  -> enrich with graph identity/provenance/relationships
+  -> serve from a materialized view when hot
+```
+
+This keeps the graph out of the "find the right row among billions" job. That job belongs to the fact table, vector index, search index, or a precomputed view.
+
+### Replace Dense Claim-To-Claim Edges With Position Clusters
+
+Naive `agrees_with` and `disputes` edges can become quadratic for popular subjects. If 10,000 claims are about `AGI`, pairwise relation derivation can create tens of millions of possible edges before the product has gained useful signal.
+
+Prefer a layered representation:
+
+```text
+Claim -> belongs_to -> PositionCluster
+PositionCluster -> supports/opposes -> PositionCluster
+PositionCluster -> has_exemplar -> Claim
+```
+
+Store raw claim facts in the columnar table. Store selected, high-confidence claim-to-claim edges only when they are product-significant. Use clusters, rollups, and exemplars for broad agreement/disagreement. The product usually needs "the representative dispute and supporting evidence," not every pairwise relation.
+
+### Add Supernode-Aware Query Planning
+
+High-degree nodes should have a different read path. Once an entity, speaker, show, or concept crosses degree thresholds, ordinary traversal should switch to rollup/query-plan mode.
+
+Required controls:
+
+- degree metrics by node type and edge type
+- per-node supernode labels
+- max-hop, max-node, max-edge, and max-time budgets
+- typed and directed traversal only
+- mandatory filters for high-degree nodes
+- materialized rollups for top speakers, claims, episodes, related entities, and stance timelines
+- query-plan introspection so API/MCP callers know whether results came from exact lookup, OLAP, vector search, graph enrichment, or rollup
+
+The safe invariant is:
+
+> The graph stores resolved dialogue structure. It does not serve unbounded exploration. Popular-node reads are answered by precomputed rollups and columnar fact queries; graph traversal is bounded, typed, and provenance-oriented.
+
 ### Version The Entire Pipeline
 
 The spec mentions deterministic IDs and idempotency, but production also needs explicit versioning:
@@ -416,15 +538,19 @@ MCP should be an adapter, not the only serving contract. Build:
 
 Agents change quickly; stable APIs age better.
 
-### Add Retrieval Guardrail Semantics To The API
+### Add Retrieval And Traversal Guardrail Semantics To The API
 
-The spec says unconstrained semantic search should be forbidden. Make that explicit in API schemas:
+The spec says unconstrained semantic search should be forbidden. The same should be true of unbounded graph traversal. Make both explicit in API schemas:
 
 - require at least one filter for semantic search
+- require at least one selective filter before traversing from high-degree nodes
 - return a typed error when a query is too broad
 - expose suggested filters
 - expose result set freshness
-- expose whether results are exact lookup, graph traversal, vector retrieval, or hybrid
+- expose whether results are exact lookup, OLAP aggregation, graph traversal, graph enrichment, vector retrieval, rollup, or hybrid
+- expose traversal budgets and whether any budget was hit
+- avoid exposing arbitrary "N hops from node X" APIs
+- expose intent-shaped APIs instead of traversal-shaped APIs
 
 Agents need to know how an answer was retrieved.
 
@@ -463,6 +589,8 @@ Before moving beyond curated podcasts, add eval gates that block promotion:
 - related-episode relevance
 - answered-question matching accuracy
 - dispute/agreement precision
+- position-cluster purity
+- representative-dispute quality
 - consensus trend stability under backfill
 - agent task success rate
 - hallucination/citation failure rate
@@ -475,6 +603,11 @@ Before moving beyond curated podcasts, add eval gates that block promotion:
 - dirty-set backlog
 - view freshness lag
 - reprocessing throughput
+- graph degree distribution by node and edge type
+- supernode count and growth rate
+- traversal fanout per endpoint
+- query budget hit rate
+- rollup freshness lag
 
 ## Build Sequence I Recommend
 
@@ -503,11 +636,13 @@ Ship:
 
 ### Phase 3: Disagreement And Belief History
 
-Add stronger cross-claim relation derivation.
+Add stronger cross-claim relation derivation without dense pairwise edge explosion.
 
 Ship:
 
-- agrees/disputes/supersedes edges
+- position clusters
+- representative agrees/disputes/supersedes edges
+- supernode rollups
 - speaker belief history
 - "dialogue around this claim"
 - topic timelines with uncertainty
@@ -545,6 +680,9 @@ Only after quality and unit economics are proven:
 5. What is the target freshness SLA: minutes, hours, or next-day?
 6. Is the initial corpus "all podcasts" or a high-value discourse vertical?
 7. Are voiceprints required for phase one, or can name/QID plus transcript labels carry the first product?
+8. What degree threshold turns an entity, speaker, or concept into a supernode?
+9. Which read paths must be columnar-first, and which may start with bounded graph lookup?
+10. Should agreement/disagreement be modeled mainly as claim-to-claim edges, position clusters, or both?
 
 ## Bottom Line
 
@@ -552,6 +690,6 @@ This architecture is promising because it turns podcasts into a structured, agen
 
 > who said what, about whom, when, where, with what confidence, and how that changed over time.
 
-The spec is strongest where it insists on resolved identities, reified claims, bitemporality, constrained retrieval, and materialized views. It is weakest where the hard production work is still implicit: concept resolution, diarization quality, extraction evaluation, rights policy, and view freshness operations.
+The spec is strongest where it insists on resolved identities, reified claims, bitemporality, constrained retrieval, and materialized views. It is weakest where the hard production work is still implicit: concept resolution, diarization quality, extraction evaluation, rights policy, view freshness operations, and supernode/traversal discipline.
 
-Build it, but build it first as a quality-gated episode intelligence product over a curated corpus. Let the graph compound from there. Full firehose scale should be an outcome of proven value, not the starting line.
+Build it, but build it first as a quality-gated episode intelligence product over a curated corpus. Treat the graph as the identity, provenance, and relationship index around the claim fact store, not as the runtime haystack. Let the graph compound from there. Full firehose scale should be an outcome of proven value, not the starting line.
