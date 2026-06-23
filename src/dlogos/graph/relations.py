@@ -194,6 +194,12 @@ def stance_relation_edges(
     for subject_claims in by_subject.values():
         # Deterministic order so pairing/ids are stable across runs.
         ordered = sorted(subject_claims, key=lambda c: c.claim_id)
+        # Collapse the claim-pair explosion: emit ONE relation per distinct
+        # (speaker-pair, polarity-relation) on a subject — "person A agrees /
+        # disputes person B about subject S", once — not one edge per claim pair.
+        # Without this a subject discussed by many speakers yields O(claims^2)
+        # near-duplicate agrees_with edges (56k on the 20-episode slice).
+        seen: set[tuple[str, str, bool]] = set()
         for i in range(len(ordered)):
             for j in range(i + 1, len(ordered)):
                 a, b = ordered[i], ordered[j]
@@ -203,11 +209,12 @@ def stance_relation_edges(
                 sign_b = _polarity_sign(claim_polarity(b))
                 if sign_a == 0 or sign_b == 0:
                     continue
-                edge_type = (
-                    EdgeType.agrees_with
-                    if sign_a == sign_b
-                    else EdgeType.disputes
-                )
+                same = sign_a == sign_b
+                lo, hi = sorted((a.speaker_id, b.speaker_id))
+                if (lo, hi, same) in seen:
+                    continue
+                seen.add((lo, hi, same))
+                edge_type = EdgeType.agrees_with if same else EdgeType.disputes
                 newer, older = _order_by_time(a, b, event_times)
                 edges.append(
                     _make_edge(

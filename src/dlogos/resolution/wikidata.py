@@ -79,15 +79,33 @@ class _HttpxWikidataClient:
         # endpoint host, or a sane public default.
         base = endpoint or _default_api_endpoint()
         self._language = language
+        self._base = base
+        # NB: do NOT use base_url + an empty-path GET — httpx normalizes that to
+        # "api.php/?..." (trailing slash) which Wikidata 301-redirects to
+        # "api.php?...". GET the full endpoint directly, and follow redirects
+        # defensively so any future redirect doesn't surface as a raise.
         self._client = httpx.Client(
-            base_url=base,
             timeout=timeout,
+            follow_redirects=True,
             headers={"User-Agent": "dLogos-PoC/0.1 (resolution; +local)"},
         )
+        # Resolution queries Wikidata once per DISTINCT entity name; many recur
+        # (Anthropic/OpenAI/AGI appear hundreds of times) and the public API
+        # rate-limits bursts (HTTP 429). Cache by query, throttle politely, and
+        # retry-with-backoff on 429/5xx — and NEVER raise out of search(): a
+        # Wikidata hiccup must degrade to "no QID", not crash the whole load.
+        self._cache: dict[tuple[str, Any, int], list[dict[str, Any]]] = {}
+        self._min_interval = 0.05
+        self._last_call_at: float | None = None
 
     def search(
         self, name: str, *, entity_type: EntityType | None = None, limit: int = 5
     ) -> list[dict[str, Any]]:  # pragma: no cover - requires network
+        import time
+
+        key = (name, entity_type, limit)
+        if key in self._cache:
+            return self._cache[key]
         params = {
             "action": _SEARCH_ACTION,
             "search": name,
@@ -97,10 +115,31 @@ class _HttpxWikidataClient:
             "limit": str(limit),
             "type": "item",
         }
-        resp = self._client.get("", params=params)
-        resp.raise_for_status()
-        payload = resp.json()
-        return list(payload.get("search", []))
+        result: list[dict[str, Any]] = []
+        for attempt in range(4):
+            if self._last_call_at is not None:
+                wait = self._min_interval - (time.monotonic() - self._last_call_at)
+                if wait > 0:
+                    time.sleep(wait)
+            try:
+                resp = self._client.get(self._base, params=params)
+            except Exception:  # noqa: BLE001 — transport hiccup: back off + retry
+                time.sleep(0.5 * (2**attempt))
+                self._last_call_at = time.monotonic()
+                continue
+            self._last_call_at = time.monotonic()
+            if resp.status_code == 429 or resp.status_code >= 500:
+                time.sleep(0.5 * (2**attempt))  # rate-limited / 5xx: back off
+                continue
+            if resp.status_code >= 400:
+                break  # other client error: treat as no match, never crash
+            try:
+                result = list(resp.json().get("search", []))
+            except Exception:  # noqa: BLE001 — malformed JSON: no match
+                result = []
+            break
+        self._cache[key] = result
+        return result
 
     def close(self) -> None:  # pragma: no cover - requires network
         self._client.close()

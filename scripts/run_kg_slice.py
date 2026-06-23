@@ -164,6 +164,10 @@ async def run_kg_slice(
             domains=list(ep.get("domains", [])),
         )
 
+    # Text-transcript labels ARE speaker names — tell the pipeline so its name
+    # resolver canonicalizes them across episodes (audio diarization gives A/B).
+    from dlogos.ingestion.transcript_source import TranscriptBackend
+
     deps = PipelineDeps(
         asr=asr,
         extractor=extractor,
@@ -173,6 +177,7 @@ async def run_kg_slice(
         resegment_words=resegment_words,
         subject_resolver=subject_resolver,
         speaker_resolver=speaker_resolver,
+        labels_are_names=isinstance(asr, TranscriptBackend),
     )
 
     # ONE Pipeline.run over the whole slice (cross-episode resolution + the
@@ -357,16 +362,22 @@ def _build_live_slice(settings: Any, args: argparse.Namespace) -> _LiveSlice:
     entity_store = SqliteCanonicalStore(out_dir / "canonical.db")
     speaker_store = SqliteSpeakerStore(out_dir / "speakers.db")
 
-    # The DeepInfra adjudicator reuses the extractor's underlying client + model
-    # (the extraction model doubles as the ambiguous-pair adjudicator).
-    inner_extractor = getattr(extractor, "inner", extractor)
-    adj_client = getattr(inner_extractor, "_client", None)
-    adj_model = getattr(
-        getattr(inner_extractor, "_settings", None), "extraction_model", None
-    )
+    # The DeepInfra adjudicator (the extraction model doubles as the
+    # ambiguous-pair adjudicator). The cascade calls it SYNCHRONOUSLY, so it
+    # needs a SYNC OpenAI client — the extractor's own client is AsyncOpenAI and
+    # would return un-awaited coroutines (always-False + leaky). Build a sync one.
+    from openai import OpenAI
+
+    adj_model = settings.extraction_model
     llm_adjudicator = (
-        llm_adjudicator_from_client(adj_client, adj_model)
-        if adj_client is not None and adj_model
+        llm_adjudicator_from_client(
+            OpenAI(
+                base_url=settings.extraction_base_url,
+                api_key=settings.extraction_api_key,
+            ),
+            adj_model,
+        )
+        if adj_model
         else None
     )
 

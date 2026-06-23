@@ -292,6 +292,10 @@ class PipelineDeps:
     resegment_words: bool = False
     subject_resolver: SubjectResolverLike | None = None
     speaker_resolver: SpeakerResolverLike | None = None
+    # When True, the transcript's diarization "labels" already ARE speaker names
+    # (text transcripts: "Tristan Harris" not "A"), so the name resolver maps each
+    # label to itself and canonicalizes it across episodes. False for audio.
+    labels_are_names: bool = False
 
 
 # --------------------------------------------------------------------------- #
@@ -870,7 +874,14 @@ class Pipeline:
         resolver = self._deps.speaker_resolver
         if resolver is None:
             return {}
-        label_names = extract_label_names(transcript, known_hosts=[])
+        label_names = dict(extract_label_names(transcript, known_hosts=[]))
+        if self._deps.labels_are_names:
+            # Text transcripts: the diarization "label" already IS the speaker's
+            # name ("Tristan Harris"), so map each label to itself. This is what
+            # lets the resolver unify the same person across episodes — audio
+            # diarization gives "A"/"B" and must mine names from spoken intros.
+            for seg in transcript.segments:
+                label_names.setdefault(seg.speaker, seg.speaker)
         if not label_names:
             return {}
         return resolver.resolve(transcript, label_names)
